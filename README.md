@@ -6,7 +6,8 @@ multiple language/tooling implementations in one repository.
 ## Repository Layout
 
 - `rust/`: Rust workspace for `scon-core`, `scon-cli`, `scon-lsp`, and fuzzing.
-- `kotlin/`: Kotlin build root and reusable `scon-core` implementation.
+- `kotlin/`: Kotlin build root, reusable `scon-core` implementation, and
+  serialization adapters.
 - `editors/`: editor integrations and Tree-sitter grammar.
 - `tests/conformance/`: language-neutral parse and resolve fixture suite.
 - `docs/`: specifications, release notes, and tooling documentation.
@@ -22,7 +23,7 @@ cargo test --workspace --exclude scon-fuzz
 
 ```sh
 cd kotlin
-./gradlew :scon-core:test
+./gradlew :scon-core:test :scon-kotlinx-serialization:test
 ./gradlew :idea-plugin:buildPlugin
 ./gradlew :idea-plugin:verifyPlugin
 ```

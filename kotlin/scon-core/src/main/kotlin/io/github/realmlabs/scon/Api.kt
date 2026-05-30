@@ -31,6 +31,12 @@ public fun resolveSource(
     return Resolver(options).resolve(document)
 }
 
+public fun parseValue(
+    source: String,
+    options: SconResolveOptions = SconResolveOptions(),
+): SconValue =
+    resolveSource(source, options)
+
 public fun resolveDocument(
     document: ParsedDocument,
     options: SconResolveOptions = SconResolveOptions(),
@@ -58,6 +64,12 @@ public fun resolveFile(
     )
     return Resolver(options.copy(includeRoot = includeRoot)).resolve(document)
 }
+
+public fun parseValueFile(
+    path: Path,
+    options: SconResolveOptions = SconResolveOptions(),
+): SconValue =
+    resolveFile(path, options)
 
 public fun formatSource(
     source: String,

@@ -24,7 +24,9 @@ dependencyResolutionManagement {
 rootProject.name = "scon"
 
 include(":scon-core")
+include(":scon-kotlinx-serialization")
 include(":idea-plugin")
 
 project(":scon-core").projectDir = file("scon-core")
+project(":scon-kotlinx-serialization").projectDir = file("scon-kotlinx-serialization")
 project(":idea-plugin").projectDir = file("../editors/idea")

@@ -11,17 +11,29 @@ public sealed interface SconValue {
 
 public sealed interface SconNumber {
     public fun toSconString(): String
+    public fun asLongOrNull(): Long?
+    public fun asULongOrNull(): ULong?
+    public fun asDouble(): Double
 
     public data class I64(val value: Long) : SconNumber {
         override fun toSconString(): String = value.toString()
+        override fun asLongOrNull(): Long = value
+        override fun asULongOrNull(): ULong? = if (value >= 0) value.toULong() else null
+        override fun asDouble(): Double = value.toDouble()
     }
 
     public data class U64(val value: ULong) : SconNumber {
         override fun toSconString(): String = value.toString()
+        override fun asLongOrNull(): Long? = if (value <= Long.MAX_VALUE.toULong()) value.toLong() else null
+        override fun asULongOrNull(): ULong = value
+        override fun asDouble(): Double = value.toDouble()
     }
 
     public data class F64(val value: Double) : SconNumber {
         override fun toSconString(): String = value.toString()
+        override fun asLongOrNull(): Long? = null
+        override fun asULongOrNull(): ULong? = null
+        override fun asDouble(): Double = value
     }
 
     public companion object {

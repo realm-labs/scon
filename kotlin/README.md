@@ -10,7 +10,7 @@ independent of the Rust workspace under `../rust`.
 Useful commands:
 
 ```sh
-./gradlew :scon-core:test
+./gradlew :scon-core:test :scon-kotlinx-serialization:test
 ./gradlew :idea-plugin:test
 ./gradlew :idea-plugin:buildPlugin
 ./gradlew :idea-plugin:verifyPlugin

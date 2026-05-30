@@ -48,7 +48,7 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :scon-core:test
+      - run: ./gradlew :scon-core:test :scon-kotlinx-serialization:test
         working-directory: kotlin
 
   idea-plugin:
