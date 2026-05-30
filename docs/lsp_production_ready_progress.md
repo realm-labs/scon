@@ -26,7 +26,7 @@ Update this document after each milestone is complete. Commit the update togethe
 | M1: Core Source Model | Complete | 90ede09 | Span-aware AST, line index, token/comment collection, parser-backed symbols. |
 | M2: Production Analysis API | Complete | 6c2e5fc | Structured diagnostics, definitions, references, include references, and source-store analysis. |
 | M3: AST/Trivia Source Formatter | Complete | 923eee3 | AST-walk source formatter with token comment preservation and round-trip tests. |
-| M4: LSP Architecture Refactor | Not started |  |  |
+| M4: LSP Architecture Refactor | Complete | pending | Split LSP into server/state/config/feature modules backed by core analysis. |
 | M5: Production Diagnostics And Formatting | Not started |  |  |
 | M6: Completion, Hover, Definition, Symbols | Not started |  |  |
 | M7: Configuration, Robustness, And Editor Integration | Not started |  |  |
@@ -60,11 +60,11 @@ Update this document after each milestone is complete. Commit the update togethe
 
 ### M4: LSP Architecture Refactor
 
-- Status: Not started
-- Summary:
-- Checks:
-- Commit:
-- Follow-up:
+- Status: Complete
+- Summary: Split `scon-lsp` into startup, server dispatch, workspace state, config, position conversion, diagnostics, formatting, hover, completion, definition, and symbols modules with a `DocumentStore`, include graph, reverse dependency tracking, and per-document diagnostics cache.
+- Checks: `cargo fmt --check`; `cargo test --workspace --exclude scon-fuzz`; `cargo clippy --workspace --exclude scon-fuzz --all-targets -- -D warnings`
+- Commit: pending
+- Follow-up: M5 should harden diagnostics and formatting behavior, add protocol tests, and report include diagnostics at the include directive where possible.
 
 ### M5: Production Diagnostics And Formatting
 
