@@ -7,7 +7,7 @@ use serde::de::{
 
 use crate::error::{Error, ErrorCode, Result};
 use crate::eval::{Entry, EvalObject, EvalValue, ResolvedDocument};
-use crate::value::Value;
+use crate::value::{Number, Value};
 
 pub(crate) struct Deserializer {
     value: Value,
@@ -38,15 +38,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         match self.value {
             Value::Null => visitor.visit_unit(),
             Value::Bool(value) => visitor.visit_bool(value),
-            Value::Number(value) => {
-                if value.contains(['.', 'e', 'E']) {
-                    visitor.visit_f64(value.parse::<f64>().map_err(Error::custom)?)
-                } else if value.starts_with('-') {
-                    visitor.visit_i64(value.parse::<i64>().map_err(Error::custom)?)
-                } else {
-                    visitor.visit_u64(value.parse::<u64>().map_err(Error::custom)?)
-                }
-            }
+            Value::Number(value) => deserialize_number_any(value, visitor),
             Value::String(value) => visitor.visit_string(value),
             Value::Array(values) => visitor.visit_seq(SeqDe {
                 iter: values.into_iter(),
@@ -73,7 +65,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Number(text) => visitor.visit_i8(parse_signed(text)?),
+            Value::Number(number) => visitor.visit_i8(number_to_signed(number)?),
             other => Err(type_error("number", &other)),
         }
     }
@@ -83,7 +75,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Number(text) => visitor.visit_i16(parse_signed(text)?),
+            Value::Number(number) => visitor.visit_i16(number_to_signed(number)?),
             other => Err(type_error("number", &other)),
         }
     }
@@ -93,7 +85,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Number(text) => visitor.visit_i32(parse_signed(text)?),
+            Value::Number(number) => visitor.visit_i32(number_to_signed(number)?),
             other => Err(type_error("number", &other)),
         }
     }
@@ -103,7 +95,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Number(text) => visitor.visit_i64(parse_signed(text)?),
+            Value::Number(number) => visitor.visit_i64(number_to_signed(number)?),
             other => Err(type_error("number", &other)),
         }
     }
@@ -113,7 +105,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Number(text) => visitor.visit_u8(parse_unsigned(text)?),
+            Value::Number(number) => visitor.visit_u8(number_to_unsigned(number)?),
             other => Err(type_error("number", &other)),
         }
     }
@@ -123,7 +115,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Number(text) => visitor.visit_u16(parse_unsigned(text)?),
+            Value::Number(number) => visitor.visit_u16(number_to_unsigned(number)?),
             other => Err(type_error("number", &other)),
         }
     }
@@ -133,7 +125,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Number(text) => visitor.visit_u32(parse_unsigned(text)?),
+            Value::Number(number) => visitor.visit_u32(number_to_unsigned(number)?),
             other => Err(type_error("number", &other)),
         }
     }
@@ -143,7 +135,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Number(text) => visitor.visit_u64(parse_unsigned(text)?),
+            Value::Number(number) => visitor.visit_u64(number_to_unsigned(number)?),
             other => Err(type_error("number", &other)),
         }
     }
@@ -153,7 +145,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Number(value) => visitor.visit_f32(value.parse::<f32>().map_err(Error::custom)?),
+            Value::Number(number) => visitor.visit_f32(number_to_f32(number)?),
             other => Err(type_error("number", &other)),
         }
     }
@@ -163,7 +155,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         V: Visitor<'de>,
     {
         match self.value {
-            Value::Number(value) => visitor.visit_f64(value.parse::<f64>().map_err(Error::custom)?),
+            Value::Number(number) => visitor.visit_f64(number_to_f64(number)),
             other => Err(type_error("number", &other)),
         }
     }
@@ -212,10 +204,10 @@ impl<'de> de::Deserializer<'de> for Deserializer {
             Value::Array(values) => {
                 let mut bytes = Vec::with_capacity(values.len());
                 for value in values {
-                    let Value::Number(text) = value else {
+                    let Value::Number(number) = value else {
                         return Err(type_error("byte array", &value));
                     };
-                    bytes.push(text.parse::<u8>().map_err(Error::custom)?);
+                    bytes.push(number_to_unsigned(number)?);
                 }
                 visitor.visit_byte_buf(bytes)
             }
@@ -354,22 +346,61 @@ impl<'de> de::Deserializer<'de> for Deserializer {
     }
 }
 
-fn parse_signed<T>(text: impl AsRef<str>) -> Result<T>
+fn deserialize_number_any<'de, V>(number: Number, visitor: V) -> Result<V::Value>
+where
+    V: Visitor<'de>,
+{
+    match number {
+        Number::I64(value) => visitor.visit_i64(value),
+        Number::U64(value) => visitor.visit_u64(value),
+        Number::F64(value) => visitor.visit_f64(value),
+    }
+}
+
+fn number_to_signed<T>(number: Number) -> Result<T>
 where
     T: TryFrom<i64>,
     T::Error: fmt::Display,
 {
-    let parsed = text.as_ref().parse::<i64>().map_err(Error::custom)?;
-    T::try_from(parsed).map_err(Error::custom)
+    let value = number.as_i64().ok_or_else(|| {
+        Error::new(
+            ErrorCode::Serde,
+            format!("number `{number}` cannot be represented as a signed integer"),
+        )
+    })?;
+    T::try_from(value).map_err(Error::custom)
 }
 
-fn parse_unsigned<T>(text: impl AsRef<str>) -> Result<T>
+fn number_to_unsigned<T>(number: Number) -> Result<T>
 where
     T: TryFrom<u64>,
     T::Error: fmt::Display,
 {
-    let parsed = text.as_ref().parse::<u64>().map_err(Error::custom)?;
-    T::try_from(parsed).map_err(Error::custom)
+    let value = number.as_u64().ok_or_else(|| {
+        Error::new(
+            ErrorCode::Serde,
+            format!("number `{number}` cannot be represented as an unsigned integer"),
+        )
+    })?;
+    T::try_from(value).map_err(Error::custom)
+}
+
+fn number_to_f32(number: Number) -> Result<f32> {
+    let value = number_to_f64(number) as f32;
+    if value.is_finite() {
+        Ok(value)
+    } else {
+        Err(Error::new(
+            ErrorCode::Serde,
+            format!("number `{number}` cannot be represented as a finite f32"),
+        ))
+    }
+}
+
+fn number_to_f64(number: Number) -> f64 {
+    number
+        .as_f64()
+        .expect("SCON Number variants are always representable as f64")
 }
 
 enum RefValue<'a> {
@@ -396,15 +427,7 @@ impl<'de> de::Deserializer<'de> for RefDeserializer<'_> {
             RefValue::Value(value) => match value {
                 EvalValue::Null => visitor.visit_unit(),
                 EvalValue::Bool(value) => visitor.visit_bool(*value),
-                EvalValue::Number(value) => {
-                    if value.contains(['.', 'e', 'E']) {
-                        visitor.visit_f64(value.parse::<f64>().map_err(Error::custom)?)
-                    } else if value.starts_with('-') {
-                        visitor.visit_i64(value.parse::<i64>().map_err(Error::custom)?)
-                    } else {
-                        visitor.visit_u64(value.parse::<u64>().map_err(Error::custom)?)
-                    }
-                }
+                EvalValue::Number(value) => deserialize_number_any(*value, visitor),
                 EvalValue::String(value) => visitor.visit_str(value),
                 EvalValue::Array(values) => visitor.visit_seq(RefSeqDe {
                     iter: values.iter(),
@@ -432,7 +455,9 @@ impl<'de> de::Deserializer<'de> for RefDeserializer<'_> {
         V: Visitor<'de>,
     {
         match self.value {
-            RefValue::Value(EvalValue::Number(text)) => visitor.visit_i8(parse_signed(text)?),
+            RefValue::Value(EvalValue::Number(number)) => {
+                visitor.visit_i8(number_to_signed(*number)?)
+            }
             other => Err(ref_type_error("number", &other)),
         }
     }
@@ -442,7 +467,9 @@ impl<'de> de::Deserializer<'de> for RefDeserializer<'_> {
         V: Visitor<'de>,
     {
         match self.value {
-            RefValue::Value(EvalValue::Number(text)) => visitor.visit_i16(parse_signed(text)?),
+            RefValue::Value(EvalValue::Number(number)) => {
+                visitor.visit_i16(number_to_signed(*number)?)
+            }
             other => Err(ref_type_error("number", &other)),
         }
     }
@@ -452,7 +479,9 @@ impl<'de> de::Deserializer<'de> for RefDeserializer<'_> {
         V: Visitor<'de>,
     {
         match self.value {
-            RefValue::Value(EvalValue::Number(text)) => visitor.visit_i32(parse_signed(text)?),
+            RefValue::Value(EvalValue::Number(number)) => {
+                visitor.visit_i32(number_to_signed(*number)?)
+            }
             other => Err(ref_type_error("number", &other)),
         }
     }
@@ -462,7 +491,9 @@ impl<'de> de::Deserializer<'de> for RefDeserializer<'_> {
         V: Visitor<'de>,
     {
         match self.value {
-            RefValue::Value(EvalValue::Number(text)) => visitor.visit_i64(parse_signed(text)?),
+            RefValue::Value(EvalValue::Number(number)) => {
+                visitor.visit_i64(number_to_signed(*number)?)
+            }
             other => Err(ref_type_error("number", &other)),
         }
     }
@@ -472,7 +503,9 @@ impl<'de> de::Deserializer<'de> for RefDeserializer<'_> {
         V: Visitor<'de>,
     {
         match self.value {
-            RefValue::Value(EvalValue::Number(text)) => visitor.visit_u8(parse_unsigned(text)?),
+            RefValue::Value(EvalValue::Number(number)) => {
+                visitor.visit_u8(number_to_unsigned(*number)?)
+            }
             other => Err(ref_type_error("number", &other)),
         }
     }
@@ -482,7 +515,9 @@ impl<'de> de::Deserializer<'de> for RefDeserializer<'_> {
         V: Visitor<'de>,
     {
         match self.value {
-            RefValue::Value(EvalValue::Number(text)) => visitor.visit_u16(parse_unsigned(text)?),
+            RefValue::Value(EvalValue::Number(number)) => {
+                visitor.visit_u16(number_to_unsigned(*number)?)
+            }
             other => Err(ref_type_error("number", &other)),
         }
     }
@@ -492,7 +527,9 @@ impl<'de> de::Deserializer<'de> for RefDeserializer<'_> {
         V: Visitor<'de>,
     {
         match self.value {
-            RefValue::Value(EvalValue::Number(text)) => visitor.visit_u32(parse_unsigned(text)?),
+            RefValue::Value(EvalValue::Number(number)) => {
+                visitor.visit_u32(number_to_unsigned(*number)?)
+            }
             other => Err(ref_type_error("number", &other)),
         }
     }
@@ -502,7 +539,9 @@ impl<'de> de::Deserializer<'de> for RefDeserializer<'_> {
         V: Visitor<'de>,
     {
         match self.value {
-            RefValue::Value(EvalValue::Number(text)) => visitor.visit_u64(parse_unsigned(text)?),
+            RefValue::Value(EvalValue::Number(number)) => {
+                visitor.visit_u64(number_to_unsigned(*number)?)
+            }
             other => Err(ref_type_error("number", &other)),
         }
     }
@@ -512,8 +551,8 @@ impl<'de> de::Deserializer<'de> for RefDeserializer<'_> {
         V: Visitor<'de>,
     {
         match self.value {
-            RefValue::Value(EvalValue::Number(text)) => {
-                visitor.visit_f32(text.parse::<f32>().map_err(Error::custom)?)
+            RefValue::Value(EvalValue::Number(number)) => {
+                visitor.visit_f32(number_to_f32(*number)?)
             }
             other => Err(ref_type_error("number", &other)),
         }
@@ -524,9 +563,7 @@ impl<'de> de::Deserializer<'de> for RefDeserializer<'_> {
         V: Visitor<'de>,
     {
         match self.value {
-            RefValue::Value(EvalValue::Number(text)) => {
-                visitor.visit_f64(text.parse::<f64>().map_err(Error::custom)?)
-            }
+            RefValue::Value(EvalValue::Number(number)) => visitor.visit_f64(number_to_f64(*number)),
             other => Err(ref_type_error("number", &other)),
         }
     }
@@ -575,10 +612,10 @@ impl<'de> de::Deserializer<'de> for RefDeserializer<'_> {
             RefValue::Value(EvalValue::Array(values)) => {
                 let mut bytes = Vec::with_capacity(values.len());
                 for value in values {
-                    let EvalValue::Number(text) = value else {
+                    let EvalValue::Number(number) = value else {
                         return Err(ref_eval_type_error("byte array", value));
                     };
-                    bytes.push(text.parse::<u8>().map_err(Error::custom)?);
+                    bytes.push(number_to_unsigned(*number)?);
                 }
                 visitor.visit_byte_buf(bytes)
             }

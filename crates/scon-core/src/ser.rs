@@ -5,7 +5,7 @@ use serde::ser::{
 };
 
 use crate::error::{Error, ErrorCode, Result};
-use crate::value::Value;
+use crate::value::{Number, Value};
 
 pub(crate) struct Serializer;
 
@@ -25,28 +25,28 @@ impl ser::Serializer for Serializer {
     }
 
     fn serialize_i8(self, v: i8) -> Result<Value> {
-        Ok(Value::Number(v.to_string()))
+        Ok(Value::Number(Number::from_i64(i64::from(v))))
     }
     fn serialize_i16(self, v: i16) -> Result<Value> {
-        Ok(Value::Number(v.to_string()))
+        Ok(Value::Number(Number::from_i64(i64::from(v))))
     }
     fn serialize_i32(self, v: i32) -> Result<Value> {
-        Ok(Value::Number(v.to_string()))
+        Ok(Value::Number(Number::from_i64(i64::from(v))))
     }
     fn serialize_i64(self, v: i64) -> Result<Value> {
-        Ok(Value::Number(v.to_string()))
+        Ok(Value::Number(Number::from_i64(v)))
     }
     fn serialize_u8(self, v: u8) -> Result<Value> {
-        Ok(Value::Number(v.to_string()))
+        Ok(Value::Number(Number::from_u64(u64::from(v))))
     }
     fn serialize_u16(self, v: u16) -> Result<Value> {
-        Ok(Value::Number(v.to_string()))
+        Ok(Value::Number(Number::from_u64(u64::from(v))))
     }
     fn serialize_u32(self, v: u32) -> Result<Value> {
-        Ok(Value::Number(v.to_string()))
+        Ok(Value::Number(Number::from_u64(u64::from(v))))
     }
     fn serialize_u64(self, v: u64) -> Result<Value> {
-        Ok(Value::Number(v.to_string()))
+        Ok(Value::Number(Number::from_u64(v)))
     }
 
     fn serialize_f32(self, v: f32) -> Result<Value> {
@@ -68,7 +68,7 @@ impl ser::Serializer for Serializer {
     fn serialize_bytes(self, v: &[u8]) -> Result<Value> {
         Ok(Value::Array(
             v.iter()
-                .map(|byte| Value::Number(byte.to_string()))
+                .map(|byte| Value::Number(Number::from_u64(u64::from(*byte))))
                 .collect(),
         ))
     }
@@ -178,15 +178,15 @@ impl ser::Serializer for Serializer {
     }
 }
 
-fn serialize_float<T: ToString + Copy + Into<f64>>(value: T) -> Result<Value> {
+fn serialize_float<T: Copy + Into<f64>>(value: T) -> Result<Value> {
     let as_f64: f64 = value.into();
-    if !as_f64.is_finite() {
-        return Err(Error::new(
+    let number = Number::from_f64(as_f64).ok_or_else(|| {
+        Error::new(
             ErrorCode::Serde,
             "SCON cannot serialize NaN or infinite floats",
-        ));
-    }
-    Ok(Value::Number(value.to_string()))
+        )
+    })?;
+    Ok(Value::Number(number))
 }
 
 pub(crate) struct SeqSer {

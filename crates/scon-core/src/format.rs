@@ -36,7 +36,7 @@ fn write_value(out: &mut String, value: &Value, indent: usize) {
         Value::Null => out.push_str("null"),
         Value::Bool(true) => out.push_str("true"),
         Value::Bool(false) => out.push_str("false"),
-        Value::Number(value) => out.push_str(value),
+        Value::Number(value) => out.push_str(&value.to_string()),
         Value::String(value) => write_string(out, value),
         Value::Array(values) => {
             if values.is_empty() {

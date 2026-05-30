@@ -26,7 +26,7 @@ pub use analysis::{
 pub use error::{Error, ErrorCode, Result};
 pub use limits::{Limits, LoadOptions};
 pub use source::{LineIndex, Token, TokenKind};
-pub use value::Value;
+pub use value::{Number, Value};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -187,10 +187,102 @@ mod tests {
     fn parse_str_returns_value() {
         let value = parse_str(r#"a.b = 1"#).unwrap();
         let mut b = IndexMap::new();
-        b.insert("b".to_string(), Value::Number("1".to_string()));
+        b.insert("b".to_string(), Value::Number(Number::from_u64(1)));
         let mut a = IndexMap::new();
         a.insert("a".to_string(), Value::Object(b));
         assert_eq!(value, Value::Object(a));
+    }
+
+    #[test]
+    fn parses_numbers_into_explicit_number_variants() {
+        let value = parse_str(
+            r#"
+            zero = 0
+            max = 18446744073709551615
+            negative = -9223372036854775808
+            decimal = 1.25
+            exponent = 1e2
+            "#,
+        )
+        .unwrap();
+        let Value::Object(root) = value else {
+            panic!("expected object root");
+        };
+
+        assert_eq!(root["zero"], Value::Number(Number::from_u64(0)));
+        assert_eq!(root["max"], Value::Number(Number::from_u64(u64::MAX)));
+        assert_eq!(root["negative"], Value::Number(Number::from_i64(i64::MIN)));
+        assert_eq!(root["decimal"], Value::Number(Number::F64(1.25)));
+        assert_eq!(root["exponent"], Value::Number(Number::F64(100.0)));
+    }
+
+    #[test]
+    fn rejects_numbers_outside_the_supported_model() {
+        let err = parse_str("too_large = 18446744073709551616").unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidNumber);
+
+        let err = parse_str("too_small = -9223372036854775809").unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidNumber);
+
+        let err = parse_str("too_large_float = 1e9999").unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidNumber);
+    }
+
+    #[test]
+    fn deserializes_numbers_with_checked_integer_conversions() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Ports {
+            small: u8,
+            signed: i16,
+            ratio: f32,
+        }
+
+        let ports: Ports = from_str(
+            r#"
+            small = 255
+            signed = -128
+            ratio = 1.5
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            ports,
+            Ports {
+                small: 255,
+                signed: -128,
+                ratio: 1.5,
+            }
+        );
+
+        assert_eq!(
+            from_str::<Ports>("small = 256\nsigned = 0\nratio = 1.0")
+                .unwrap_err()
+                .code,
+            ErrorCode::Serde
+        );
+        assert_eq!(
+            from_str::<Ports>("small = -1\nsigned = 0\nratio = 1.0")
+                .unwrap_err()
+                .code,
+            ErrorCode::Serde
+        );
+    }
+
+    #[test]
+    fn serializes_numbers_into_explicit_number_variants() {
+        assert_eq!(
+            to_value(&-1i64).unwrap(),
+            Value::Number(Number::from_i64(-1))
+        );
+        assert_eq!(to_value(&1u64).unwrap(), Value::Number(Number::from_u64(1)));
+        assert_eq!(
+            to_value(&1.25f64).unwrap(),
+            Value::Number(Number::F64(1.25))
+        );
+        assert_eq!(
+            to_string_fragment(&Value::Number(Number::F64(1.0))),
+            "1.0\n"
+        );
     }
 
     #[test]
@@ -222,8 +314,8 @@ mod tests {
         let Value::Object(root) = value else {
             panic!("expected object root");
         };
-        assert_eq!(root["a"], Value::Number("1".to_string()));
-        assert_eq!(root["b"], Value::Number("2".to_string()));
+        assert_eq!(root["a"], Value::Number(Number::from_u64(1)));
+        assert_eq!(root["b"], Value::Number(Number::from_u64(2)));
 
         let err = parse_str("a = 1\rb = 2").unwrap_err();
         assert_eq!(err.code, ErrorCode::InvalidCharacter);
@@ -424,15 +516,10 @@ server {
             }
         }
 
-        let root = std::env::temp_dir().join(format!(
-            "scon-analysis-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let app = root.join("app.scon");
-        let base = root.join("base.scon");
+        let root = tempfile::tempdir().unwrap();
+        let root_path = root.path().canonicalize().unwrap();
+        let app = root_path.join("app.scon");
+        let base = root_path.join("base.scon");
         let mut sources = HashMap::new();
         sources.insert(
             app.clone(),
@@ -481,16 +568,9 @@ server {
 
     #[test]
     fn parse_file_evaluates_includes_in_source_order() {
-        let dir = std::env::temp_dir().join(format!(
-            "scon-test-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = tempfile::tempdir().unwrap();
         fs::write(
-            dir.join("base.scon"),
+            dir.path().join("base.scon"),
             r#"
             server {
               host = ${defaults.host}
@@ -500,7 +580,7 @@ server {
         )
         .unwrap();
         fs::write(
-            dir.join("app.scon"),
+            dir.path().join("app.scon"),
             r#"
             defaults {
               host = "0.0.0.0"
@@ -510,7 +590,7 @@ server {
         )
         .unwrap();
 
-        let value = parse_file(dir.join("app.scon")).unwrap();
+        let value = parse_file(dir.path().join("app.scon")).unwrap();
         let Value::Object(root) = value else {
             panic!("expected object root");
         };
@@ -518,8 +598,6 @@ server {
             panic!("expected server object");
         };
         assert_eq!(server["host"], Value::String("0.0.0.0".to_string()));
-
-        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

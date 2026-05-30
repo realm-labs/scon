@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use scon::{Diagnostic, FormatOptions, LoadOptions, Value};
+use scon::{Diagnostic, FormatOptions, LoadOptions, Number, Value};
 
 #[derive(Debug, Parser)]
 #[command(name = "scon", version, about = "SCON configuration language tooling")]
@@ -206,19 +206,13 @@ fn value_to_json(value: &Value) -> serde_json::Value {
     match value {
         Value::Null => serde_json::Value::Null,
         Value::Bool(value) => serde_json::Value::Bool(*value),
-        Value::Number(value) => {
-            if let Ok(value) = value.parse::<i64>() {
-                serde_json::Value::Number(value.into())
-            } else if let Ok(value) = value.parse::<u64>() {
-                serde_json::Value::Number(value.into())
-            } else if let Ok(value) = value.parse::<f64>() {
-                serde_json::Number::from_f64(value)
-                    .map(serde_json::Value::Number)
-                    .unwrap_or(serde_json::Value::Null)
-            } else {
-                serde_json::Value::String(value.clone())
-            }
-        }
+        Value::Number(value) => match value {
+            Number::I64(value) => serde_json::Value::Number((*value).into()),
+            Number::U64(value) => serde_json::Value::Number((*value).into()),
+            Number::F64(value) => serde_json::Number::from_f64(*value)
+                .map(serde_json::Value::Number)
+                .expect("SCON f64 numbers are finite"),
+        },
         Value::String(value) => serde_json::Value::String(value.clone()),
         Value::Array(values) => {
             serde_json::Value::Array(values.iter().map(value_to_json).collect())

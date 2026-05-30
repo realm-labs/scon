@@ -159,9 +159,10 @@ mod tests {
 
     #[test]
     fn open_documents_override_filesystem_for_include_analysis() {
-        let root = unique_root();
-        let app = root.join("app.scon");
-        let base = root.join("base.scon");
+        let root = tempfile::tempdir().unwrap();
+        let root_path = root.path().canonicalize().unwrap();
+        let app = root_path.join("app.scon");
+        let base = root_path.join("base.scon");
         let app_uri = Url::from_file_path(&app).unwrap();
         let base_uri = Url::from_file_path(&base).unwrap();
         let mut state = WorkspaceState::default();
@@ -206,15 +207,5 @@ server {
                 .iter()
                 .any(|diagnostic| diagnostic.code == scon::ErrorCode::MissingReference)
         );
-    }
-
-    fn unique_root() -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "scon-lsp-state-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ))
     }
 }

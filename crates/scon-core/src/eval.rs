@@ -6,7 +6,7 @@ use rustc_hash::FxBuildHasher;
 use crate::ast::*;
 use crate::error::{Error, ErrorCode, Result};
 use crate::loader::IncludeLoader;
-use crate::value::Value;
+use crate::value::{Number, Value};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Layer {
@@ -24,7 +24,7 @@ enum Kind {
 pub(crate) enum EvalValue {
     Null,
     Bool(bool),
-    Number(String),
+    Number(Number),
     String(String),
     Array(Vec<EvalValue>),
     Object(EvalObject),
@@ -222,7 +222,7 @@ impl Evaluator {
                                 )?;
                                 match &value.value {
                                     EvalValue::String(text) => out.push_str(text),
-                                    EvalValue::Number(text) => out.push_str(text),
+                                    EvalValue::Number(number) => out.push_str(&number.to_string()),
                                     EvalValue::Bool(value) => {
                                         out.push_str(if *value { "true" } else { "false" })
                                     }
@@ -240,7 +240,9 @@ impl Evaluator {
                     Ok(EvalValue::String(out))
                 }
             },
-            AstValue::Number { value: text, .. } => Ok(EvalValue::Number(text)),
+            AstValue::Number { value: text, span } => Number::parse(&text)
+                .map(EvalValue::Number)
+                .map_err(|err| err.at(location_for_span(file, &span))),
             AstValue::Bool { value, .. } => Ok(EvalValue::Bool(value)),
             AstValue::Null { .. } => Ok(EvalValue::Null),
             AstValue::Substitution {
@@ -510,7 +512,7 @@ fn clone_value_with_layer(value: &EvalValue, layer: Layer, kind: Kind) -> EvalVa
     match value {
         EvalValue::Null => EvalValue::Null,
         EvalValue::Bool(value) => EvalValue::Bool(*value),
-        EvalValue::Number(value) => EvalValue::Number(value.clone()),
+        EvalValue::Number(value) => EvalValue::Number(*value),
         EvalValue::String(value) => EvalValue::String(value.clone()),
         EvalValue::Array(value) => EvalValue::Array(value.clone()),
         EvalValue::Object(value) => EvalValue::Object(clone_object_with_layer(value, layer, kind)),

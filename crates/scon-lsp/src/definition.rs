@@ -71,15 +71,10 @@ mod tests {
 
     #[tokio::test]
     async fn include_path_goes_to_included_file() {
-        let root = std::env::temp_dir().join(format!(
-            "scon-lsp-definition-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let app = root.join("app.scon");
-        let base = root.join("base.scon");
+        let root = tempfile::tempdir().unwrap();
+        let root_path = root.path().canonicalize().unwrap();
+        let app = root_path.join("app.scon");
+        let base = root_path.join("base.scon");
         let app_uri = Url::from_file_path(&app).unwrap();
         let base_uri = Url::from_file_path(&base).unwrap();
         let state = Mutex::new(WorkspaceState::default());
