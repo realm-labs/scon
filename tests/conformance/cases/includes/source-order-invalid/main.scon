@@ -1,0 +1,4 @@
+include "./server.scon"
+defaults {
+  host = "0.0.0.0"
+}

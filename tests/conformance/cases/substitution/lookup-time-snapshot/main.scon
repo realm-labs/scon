@@ -1,0 +1,11 @@
+base {
+  host = "0.0.0.0"
+}
+
+prod {
+  ...${base}
+}
+
+base {
+  port = 8080
+}

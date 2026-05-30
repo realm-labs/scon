@@ -1,0 +1,7 @@
+{
+  "name": "demo",
+  "server_port": 8080,
+  "log-level": "info",
+  "http.port": 80,
+  "sp ace": true
+}

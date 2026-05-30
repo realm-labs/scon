@@ -1,0 +1,4 @@
+# hash comment
+name	=	"demo"
+// slash comment
+port     =     8080

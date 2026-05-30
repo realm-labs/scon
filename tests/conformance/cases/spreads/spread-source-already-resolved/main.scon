@@ -1,0 +1,8 @@
+base {
+  host = "base.example"
+  url = "http://${base.host}"
+}
+prod {
+  ...${base}
+  host = "prod.example"
+}

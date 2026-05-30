@@ -945,7 +945,11 @@ impl<'a> AnalysisLoader<'a> {
             ));
         }
         let doc = crate::parser::parse_str(&source, Some(path.clone())).map_err(|err| Error {
-            code: ErrorCode::IncludeParseError,
+            code: if err.code == ErrorCode::InvalidRootType {
+                ErrorCode::IncludeRootTypeError
+            } else {
+                ErrorCode::IncludeParseError
+            },
             ..err
         })?;
         self.stack.pop();

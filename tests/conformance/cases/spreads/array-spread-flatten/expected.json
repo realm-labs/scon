@@ -1,0 +1,4 @@
+{
+  "base_paths": ["/bin", "/usr/bin"],
+  "paths": ["/bin", "/usr/bin", "/opt/app/bin"]
+}

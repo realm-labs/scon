@@ -1,0 +1,10 @@
+{
+  "base": {
+    "host": "base.example",
+    "url": "http://base.example"
+  },
+  "prod": {
+    "host": "prod.example",
+    "url": "http://base.example"
+  }
+}

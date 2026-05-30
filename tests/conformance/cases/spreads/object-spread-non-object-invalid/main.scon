@@ -1,0 +1,4 @@
+defaults = [1, 2]
+prod {
+  ...${defaults}
+}

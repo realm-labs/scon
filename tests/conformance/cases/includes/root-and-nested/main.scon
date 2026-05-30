@@ -1,0 +1,5 @@
+include "./root.scon"
+app {
+  include "./app-base.scon"
+  name = "demo"
+}

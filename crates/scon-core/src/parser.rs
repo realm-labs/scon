@@ -82,7 +82,7 @@ impl<'a> Parser<'a> {
                 let member_start = self.pos;
                 let loc = self.loc();
                 self.consume(b"...");
-                self.skip_inline_ws();
+                self.skip_inline_ws()?;
                 let path = self.parse_substitution()?;
                 body.spreads.push(ObjectSpread {
                     path: path.path,
@@ -128,7 +128,7 @@ impl<'a> Parser<'a> {
             let loc = self.loc();
             self.consume(b"include");
             if matches!(self.peek(), Some(b' ' | b'\t')) {
-                self.skip_inline_ws();
+                self.skip_inline_ws()?;
                 let path_start = self.pos;
                 let path = self.parse_string_no_interpolation()?;
                 return Ok(LocalMember::Include {
@@ -145,11 +145,11 @@ impl<'a> Parser<'a> {
 
         let loc = self.loc();
         let path = self.parse_path()?;
-        self.skip_inline_ws();
+        self.skip_inline_ws()?;
         let value = match self.peek() {
             Some(b'=') => {
                 self.bump();
-                self.skip_inline_ws();
+                self.skip_inline_ws()?;
                 match self.peek() {
                     None | Some(b'\n') => {
                         return Err(self.err(
@@ -198,7 +198,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_value(&mut self) -> Result<AstValue> {
-        self.skip_inline_ws();
+        self.skip_inline_ws()?;
         let start = self.pos;
         match self.peek() {
             Some(b'{') => {
@@ -269,7 +269,7 @@ impl<'a> Parser<'a> {
                 let item_start = self.pos;
                 let loc = self.loc();
                 self.consume(b"...");
-                self.skip_inline_ws();
+                self.skip_inline_ws()?;
                 let path = self.parse_substitution()?;
                 items.push(ArrayItem::Spread {
                     path: path.path,
@@ -526,16 +526,29 @@ impl<'a> Parser<'a> {
         Ok(self.source[start..self.pos].to_string())
     }
 
-    fn skip_inline_ws(&mut self) {
+    fn skip_inline_ws(&mut self) -> Result<()> {
         let start = self.pos;
-        while self
-            .bytes
-            .get(self.pos)
-            .is_some_and(|ch| matches!(ch, b' ' | b'\t'))
-        {
-            self.pos += 1;
+        while let Some(ch) = self.bytes.get(self.pos).copied() {
+            match ch {
+                b' ' | b'\t' => self.pos += 1,
+                byte if byte >= 0x80 => {
+                    let loc = self.loc();
+                    let ch = self.bump_char().expect("valid UTF-8 boundary");
+                    if ch.is_whitespace() {
+                        return Err(Error::new(
+                            ErrorCode::InvalidWhitespace,
+                            format!("invalid whitespace character U+{:04X}", ch as u32),
+                        )
+                        .at(loc));
+                    }
+                    self.rewind_char(ch);
+                    break;
+                }
+                _ => break,
+            }
         }
         self.column += self.pos - start;
+        Ok(())
     }
 
     fn skip_ws_comments(&mut self) -> Result<bool> {
@@ -543,7 +556,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.peek() {
                 Some(b' ' | b'\t') => {
-                    self.skip_inline_ws();
+                    self.skip_inline_ws()?;
                 }
                 Some(b'\n') => {
                     saw_newline = true;

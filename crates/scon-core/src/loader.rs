@@ -81,10 +81,10 @@ impl FileLoader {
 
     pub(crate) fn load_entry(&mut self) -> Result<Document> {
         let entry = self.entry.clone();
-        self.load_canonical(&entry)
+        self.load_canonical(&entry, false)
     }
 
-    fn load_canonical(&mut self, path: &Path) -> Result<Document> {
+    fn load_canonical(&mut self, path: &Path, is_include: bool) -> Result<Document> {
         if let Some(doc) = self.cache.get(path) {
             return Ok(doc.clone());
         }
@@ -133,7 +133,15 @@ impl FileLoader {
             )
         })?;
         let doc = parser::parse_str(&source, Some(path.to_path_buf())).map_err(|err| Error {
-            code: ErrorCode::IncludeParseError,
+            code: if is_include {
+                if err.code == ErrorCode::InvalidRootType {
+                    ErrorCode::IncludeRootTypeError
+                } else {
+                    ErrorCode::IncludeParseError
+                }
+            } else {
+                err.code
+            },
             ..err
         })?;
         self.stack.pop();
@@ -187,7 +195,7 @@ impl IncludeLoader for FileLoader {
         loc: Location,
     ) -> Result<Document> {
         let resolved = self.resolve_include(including_file, path, loc)?;
-        self.load_canonical(&resolved)
+        self.load_canonical(&resolved, true)
     }
 }
 

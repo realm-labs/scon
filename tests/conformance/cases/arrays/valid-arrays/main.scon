@@ -1,0 +1,7 @@
+ports = [80, 443, 8080]
+paths = [
+  "/bin",
+  "/usr/bin",
+  "/opt/bin",
+]
+matrix = [[1, 2], [3, 4]]

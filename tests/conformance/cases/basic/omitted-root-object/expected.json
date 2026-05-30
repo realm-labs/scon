@@ -1,0 +1,11 @@
+{
+  "name": "demo",
+  "enabled": true,
+  "count": 42,
+  "ratio": 1.5,
+  "none": null,
+  "paths": ["/bin", "/usr/bin"],
+  "server": {
+    "host": "127.0.0.1"
+  }
+}

@@ -52,11 +52,12 @@ pub(crate) fn eval_resolved_document(
     doc: Document,
     loader: &mut dyn IncludeLoader,
 ) -> Result<ResolvedDocument> {
+    let Document { body, file, .. } = doc;
     let mut evaluator = Evaluator {
         root: EvalObject::default(),
         in_progress: vec![Vec::new()],
+        include_stack: file.iter().map(|path| path.to_path_buf()).collect(),
     };
-    let Document { body, file, .. } = doc;
     evaluator.eval_contents(body, &[], file.as_deref(), loader)?;
     evaluator.in_progress.pop();
     Ok(ResolvedDocument {
@@ -67,6 +68,7 @@ pub(crate) fn eval_resolved_document(
 struct Evaluator {
     root: EvalObject,
     in_progress: Vec<Vec<String>>,
+    include_stack: Vec<std::path::PathBuf>,
 }
 
 impl Evaluator {
@@ -113,7 +115,20 @@ impl Evaluator {
                         file: included_file,
                         ..
                     } = included;
+                    if let Some(included_file) = &included_file {
+                        if self.include_stack.contains(included_file) {
+                            return Err(Error::new(
+                                ErrorCode::IncludeCycle,
+                                format!("include cycle: {}", included_file.display()),
+                            )
+                            .at(loc));
+                        }
+                        self.include_stack.push(included_file.clone());
+                    }
                     self.eval_contents(included_body, path, included_file.as_deref(), loader)?;
+                    if included_file.is_some() {
+                        self.include_stack.pop();
+                    }
                 }
                 LocalMember::Field(field) => self.eval_field(field, path, file, loader)?,
             }
@@ -179,6 +194,7 @@ impl Evaluator {
                 let mut nested = Evaluator {
                     root: EvalObject::default(),
                     in_progress: vec![Vec::new()],
+                    include_stack: self.include_stack.clone(),
                 };
                 // Anonymous object values cannot contain includes because there is no file context here.
                 nested.eval_contents(body, &[], file, &mut crate::loader::NoopLoader)?;

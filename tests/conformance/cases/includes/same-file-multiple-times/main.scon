@@ -1,0 +1,9 @@
+source {
+  value = 1
+}
+first {
+  include "./fragment.scon"
+}
+second {
+  include "./fragment.scon"
+}
