@@ -6,7 +6,7 @@
   "keywords": ["tree-sitter", "scon"],
   "license": "MIT",
   "devDependencies": {
-    "tree-sitter-cli": "^0.25.0"
+    "tree-sitter-cli": "^0.26.9"
   },
   "tree-sitter": [
     {
