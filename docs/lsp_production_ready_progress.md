@@ -30,7 +30,7 @@ Update this document after each milestone is complete. Commit the update togethe
 | M5: Production Diagnostics And Formatting | Complete | 107978e | Precise reference diagnostics, include-location errors, dependent reanalysis tests, and parseable formatting tests. |
 | M6: Completion, Hover, Definition, Symbols | Complete | 19f728f | Semantic completion, hover previews, include definition, and nested symbols. |
 | M7: Configuration, Robustness, And Editor Integration | Complete | f64e288 | Runtime config, editor settings, logging, and release build verification. |
-| M8: Release Readiness | Complete | pending | End-user LSP docs, troubleshooting, release checklist, CI and fuzz verification. |
+| M8: Release Readiness | Complete | fa8ebce | End-user LSP docs, troubleshooting, release checklist, CI and fuzz verification. |
 
 ## Milestone Log
 
@@ -95,5 +95,5 @@ Update this document after each milestone is complete. Commit the update togethe
 - Status: Complete
 - Summary: Added end-user LSP installation/configuration docs, troubleshooting guidance, release checklist, and verified CI already covers core, CLI, LSP tests, release builds, and fuzz smoke.
 - Checks: `cargo fmt --check`; `cargo test --workspace --exclude scon-fuzz`; `cargo clippy --workspace --exclude scon-fuzz --all-targets -- -D warnings`; `cargo build --workspace --exclude scon-fuzz --release`; `cargo +nightly fuzz run parse_str -- -runs=10000`; `cargo +nightly fuzz run format_source -- -runs=10000`
-- Commit: pending
+- Commit: fa8ebce
 - Follow-up: Push the milestone branch and use the release checklist for the first tagged release.
