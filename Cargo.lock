@@ -912,6 +912,7 @@ name = "scon-lsp"
 version = "0.1.0"
 dependencies = [
  "scon-core",
+ "serde_json",
  "tokio",
  "tower-lsp",
 ]

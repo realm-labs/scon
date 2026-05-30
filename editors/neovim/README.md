@@ -13,5 +13,20 @@ require("lspconfig.configs").scon_lsp = {
   },
 }
 
-require("lspconfig").scon_lsp.setup({})
+require("lspconfig").scon_lsp.setup({
+  settings = {
+    scon = {
+      includeRoot = "",
+      format = { enable = true },
+      diagnostics = { resolveOnChange = true },
+      maxFileSize = 1048576,
+    },
+  },
+})
+```
+
+Use an explicit binary path by changing `cmd`, for example:
+
+```lua
+cmd = { "/path/to/scon-lsp" }
 ```

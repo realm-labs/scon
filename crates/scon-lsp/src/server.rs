@@ -25,7 +25,10 @@ pub async fn run() {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    async fn initialize(&self, _: InitializeParams) -> LspResult<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
+        if let Some(options) = params.initialization_options {
+            self.state.lock().await.config.apply_json(&options);
+        }
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
@@ -70,7 +73,9 @@ impl LanguageServer for Backend {
                 .await
                 .change_document(uri.clone(), change.text);
         }
-        crate::diagnostics::publish(&self.client, &self.state, uri).await;
+        if self.state.lock().await.config.diagnostics_resolve_on_change {
+            crate::diagnostics::publish(&self.client, &self.state, uri).await;
+        }
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
@@ -79,6 +84,13 @@ impl LanguageServer for Backend {
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         crate::diagnostics::clear(&self.client, &self.state, params.text_document.uri).await;
+    }
+
+    async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
+        self.state.lock().await.config.apply_json(&params.settings);
+        self.client
+            .log_message(MessageType::INFO, "scon-lsp configuration updated")
+            .await;
     }
 
     async fn formatting(

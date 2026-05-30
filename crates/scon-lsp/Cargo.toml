@@ -9,5 +9,6 @@ path = "src/main.rs"
 
 [dependencies]
 scon = { package = "scon-core", path = "../scon-core" }
+serde_json = "1"
 tokio = { version = "1", features = ["io-std", "macros", "rt-multi-thread", "sync"] }
 tower-lsp = "0.20"

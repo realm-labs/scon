@@ -42,7 +42,18 @@
         "scon.includeRoot": {
           "type": "string",
           "default": "",
-          "description": "Optional include root passed to future server configuration."
+          "description": "Optional include root for resolving SCON include directives."
+        },
+        "scon.diagnostics.resolveOnChange": {
+          "type": "boolean",
+          "default": true,
+          "description": "Resolve includes and substitutions on every document change."
+        },
+        "scon.maxFileSize": {
+          "type": "number",
+          "default": 1048576,
+          "minimum": 1,
+          "description": "Maximum SCON file size in bytes for LSP analysis."
         }
       }
     }

@@ -87,9 +87,16 @@ impl WorkspaceState {
     pub fn analyze_uri(&self, uri: &Url) -> Option<scon::AnalyzedDocument> {
         let text = self.document_text(uri)?;
         if let Ok(path) = uri.to_file_path() {
+            let default_limits = scon::Limits::default();
             let options = scon::LoadOptions {
                 include_root: self.config.include_root.clone(),
-                ..scon::LoadOptions::default()
+                limits: scon::Limits {
+                    max_file_size: self
+                        .config
+                        .max_file_size
+                        .unwrap_or(default_limits.max_file_size),
+                    ..default_limits
+                },
             };
             Some(scon::analyze_file_with_store(
                 path,

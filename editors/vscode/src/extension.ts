@@ -11,7 +11,8 @@ export function activate(context: vscode.ExtensionContext) {
     documentSelector: [{ scheme: "file", language: "scon" }],
     synchronize: {
       configurationSection: "scon"
-    }
+    },
+    initializationOptions: getServerSettings()
   };
 
   client = new LanguageClient("scon", "SCON Language Server", serverOptions, clientOptions);
@@ -20,4 +21,20 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate(): Thenable<void> | undefined {
   return client?.stop();
+}
+
+function getServerSettings() {
+  const config = vscode.workspace.getConfiguration("scon");
+  return {
+    scon: {
+      includeRoot: config.get<string>("includeRoot", ""),
+      format: {
+        enable: config.get<boolean>("format.enable", true)
+      },
+      diagnostics: {
+        resolveOnChange: config.get<boolean>("diagnostics.resolveOnChange", true)
+      },
+      maxFileSize: config.get<number>("maxFileSize", 1048576)
+    }
+  };
 }
