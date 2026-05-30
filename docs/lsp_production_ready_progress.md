@@ -29,7 +29,7 @@ Update this document after each milestone is complete. Commit the update togethe
 | M4: LSP Architecture Refactor | Complete | d931d4d | Split LSP into server/state/config/feature modules backed by core analysis. |
 | M5: Production Diagnostics And Formatting | Complete | 107978e | Precise reference diagnostics, include-location errors, dependent reanalysis tests, and parseable formatting tests. |
 | M6: Completion, Hover, Definition, Symbols | Complete | 19f728f | Semantic completion, hover previews, include definition, and nested symbols. |
-| M7: Configuration, Robustness, And Editor Integration | Complete | pending | Runtime config, editor settings, logging, and release build verification. |
+| M7: Configuration, Robustness, And Editor Integration | Complete | f64e288 | Runtime config, editor settings, logging, and release build verification. |
 | M8: Release Readiness | Not started |  |  |
 
 ## Milestone Log
@@ -87,7 +87,7 @@ Update this document after each milestone is complete. Commit the update togethe
 - Status: Complete
 - Summary: Added runtime JSON configuration for include root, formatting, resolve-on-change, and max file size; applied initialization and configuration-change settings; added config logging; and updated VS Code, Neovim, and Zed integration settings.
 - Checks: `cargo fmt --check`; `cargo test --workspace --exclude scon-fuzz`; `cargo clippy --workspace --exclude scon-fuzz --all-targets -- -D warnings`; `cargo build --workspace --exclude scon-fuzz --release`
-- Commit: pending
+- Commit: f64e288
 - Follow-up: M8 should add end-user LSP docs, troubleshooting, release checklist, CI coverage, and fuzz smoke release verification.
 
 ### M8: Release Readiness
