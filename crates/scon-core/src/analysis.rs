@@ -229,8 +229,8 @@ pub fn analyze_file_with_store(
 }
 
 pub fn format_source(source: &str, options: FormatOptions) -> Result<String> {
-    crate::parser::parse_str(source, None)?;
-    Ok(format_source_unchecked(source, options))
+    let document = crate::parser::parse_str(source, None)?;
+    Ok(SourceFormatter::new(source, options).format_document(&document))
 }
 
 pub fn resolve_source(source: &str, options: ParseOptions) -> Result<Value> {
@@ -355,91 +355,356 @@ fn related_information_from_error(
         .collect()
 }
 
-fn format_source_unchecked(source: &str, options: FormatOptions) -> String {
-    let mut out = String::new();
-    let mut indent = 0usize;
-    for raw_line in source.lines() {
-        let trimmed = raw_line.trim();
-        if trimmed.is_empty() {
+#[derive(Clone, Debug)]
+struct FormatComment {
+    line: usize,
+    text: String,
+    span: Span,
+    emitted: bool,
+}
+
+struct SourceFormatter<'a> {
+    source: &'a str,
+    options: FormatOptions,
+    line_index: LineIndex,
+    comments: Vec<FormatComment>,
+}
+
+impl<'a> SourceFormatter<'a> {
+    fn new(source: &'a str, options: FormatOptions) -> Self {
+        let line_index = LineIndex::new(source);
+        let tokens = source::collect_tokens(source);
+        let comments = tokens
+            .into_iter()
+            .filter_map(|token| {
+                if !matches!(token.kind, source::TokenKind::Comment(_)) {
+                    return None;
+                }
+                Some(FormatComment {
+                    line: line_index
+                        .source_position(source, token.span.start_byte)
+                        .line,
+                    text: source[token.span.start_byte..token.span.end_byte].to_string(),
+                    span: token.span,
+                    emitted: false,
+                })
+            })
+            .collect();
+        Self {
+            source,
+            options,
+            line_index,
+            comments,
+        }
+    }
+
+    fn format_document(mut self, document: &Document) -> String {
+        let mut out = String::new();
+        self.emit_body(&document.body, 0, &mut out);
+        self.emit_comments_before(document.span.end_byte, 0, &mut out);
+        if !out.ends_with('\n') {
             out.push('\n');
-            continue;
         }
-        if starts_with_closer(trimmed) {
-            indent = indent.saturating_sub(options.indent);
+        out
+    }
+
+    fn emit_body(&mut self, body: &ObjectBody, indent: usize, out: &mut String) {
+        let mut entries = body_entries(body);
+        entries.sort_by_key(BodyEntry::start_byte);
+        for entry in entries {
+            self.emit_comments_before(entry.start_byte(), indent, out);
+            match entry {
+                BodyEntry::Spread(spread) => {
+                    self.write_indent(out, indent);
+                    out.push_str("...");
+                    out.push_str(&format_substitution(&spread.path));
+                    self.emit_inline_comment(spread.span, out);
+                    out.push('\n');
+                }
+                BodyEntry::Include {
+                    path, path_span, ..
+                } => {
+                    self.write_indent(out, indent);
+                    out.push_str("include ");
+                    out.push_str(&format_string_literal(path));
+                    self.emit_inline_comment(*path_span, out);
+                    out.push('\n');
+                }
+                BodyEntry::Field(field) => {
+                    self.emit_field(field, indent, out);
+                }
+            }
         }
-        write_spaces(&mut out, indent);
-        out.push_str(&format_line(trimmed));
-        out.push('\n');
-        if opens_block(trimmed) {
-            indent += options.indent;
+        self.emit_comments_before(body.span.end_byte, indent, out);
+    }
+
+    fn emit_field(&mut self, field: &crate::ast::Field, indent: usize, out: &mut String) {
+        self.write_indent(out, indent);
+        out.push_str(&format_path(&field.path));
+        match &field.value {
+            AstValue::Object { body, .. } => {
+                if field_uses_equals(self.source, field) {
+                    out.push_str(" = {");
+                } else {
+                    out.push_str(" {");
+                }
+                self.emit_inline_comment(field_header_span(self.source, field), out);
+                out.push('\n');
+                self.emit_body(body, indent + self.options.indent, out);
+                self.write_indent(out, indent);
+                out.push('}');
+                self.emit_inline_comment(field.span, out);
+                out.push('\n');
+            }
+            value => {
+                out.push_str(" = ");
+                self.emit_value(value, indent, out);
+                self.emit_inline_comment(field.span, out);
+                out.push('\n');
+            }
         }
     }
-    if !out.ends_with('\n') {
-        out.push('\n');
+
+    fn emit_value(&mut self, value: &AstValue, indent: usize, out: &mut String) {
+        match value {
+            AstValue::Object { body, .. } => {
+                out.push('{');
+                out.push('\n');
+                self.emit_body(body, indent + self.options.indent, out);
+                self.write_indent(out, indent);
+                out.push('}');
+            }
+            AstValue::Array { items, span } => self.emit_array(items, *span, indent, out),
+            AstValue::String { span, .. }
+            | AstValue::Number { span, .. }
+            | AstValue::Bool { span, .. }
+            | AstValue::Null { span } => out.push_str(self.span_text(*span).trim()),
+            AstValue::Substitution { path, .. } => out.push_str(&format_substitution(path)),
+        }
     }
-    out
+
+    fn emit_array(&mut self, items: &[ArrayItem], span: Span, indent: usize, out: &mut String) {
+        if items.is_empty() {
+            out.push_str("[]");
+            return;
+        }
+        out.push('[');
+        out.push('\n');
+        for (index, item) in items.iter().enumerate() {
+            self.emit_comments_before(array_item_start(item), indent + self.options.indent, out);
+            self.write_indent(out, indent + self.options.indent);
+            match item {
+                ArrayItem::Value(value) => {
+                    self.emit_value(value, indent + self.options.indent, out)
+                }
+                ArrayItem::Spread { path, .. } => {
+                    out.push_str("...");
+                    out.push_str(&format_substitution(path));
+                }
+            }
+            if index + 1 != items.len() {
+                out.push(',');
+            }
+            self.emit_inline_comment(array_item_span(item), out);
+            out.push('\n');
+        }
+        self.emit_comments_before(span.end_byte, indent + self.options.indent, out);
+        self.write_indent(out, indent);
+        out.push(']');
+    }
+
+    fn emit_comments_before(&mut self, byte: usize, indent: usize, out: &mut String) {
+        let mut index = 0;
+        while index < self.comments.len() {
+            if self.comments[index].emitted || self.comments[index].span.start_byte >= byte {
+                index += 1;
+                continue;
+            }
+            self.write_indent(out, indent);
+            out.push_str(self.comments[index].text.trim());
+            out.push('\n');
+            self.comments[index].emitted = true;
+            index += 1;
+        }
+    }
+
+    fn emit_inline_comment(&mut self, span: Span, out: &mut String) {
+        let line = self
+            .line_index
+            .source_position(self.source, span.start_byte)
+            .line;
+        if let Some(comment) = self.comments.iter_mut().find(|comment| {
+            !comment.emitted
+                && comment.line == line
+                && comment.span.start_byte >= span.start_byte
+                && comment.span.start_byte >= span.end_byte
+        }) {
+            out.push(' ');
+            out.push_str(comment.text.trim());
+            comment.emitted = true;
+        }
+    }
+
+    fn span_text(&self, span: Span) -> &str {
+        self.source
+            .get(span.start_byte..span.end_byte)
+            .unwrap_or_default()
+    }
+
+    fn write_indent(&self, out: &mut String, indent: usize) {
+        for _ in 0..indent {
+            out.push(' ');
+        }
+    }
 }
 
-fn format_line(line: &str) -> String {
-    let Some(eq) = find_unquoted(line, b'=') else {
-        return line.to_string();
+enum BodyEntry<'a> {
+    Spread(&'a crate::ast::ObjectSpread),
+    Include {
+        path: &'a str,
+        path_span: &'a Span,
+        span: &'a Span,
+    },
+    Field(&'a crate::ast::Field),
+}
+
+impl BodyEntry<'_> {
+    fn start_byte(&self) -> usize {
+        match self {
+            BodyEntry::Spread(spread) => spread.span.start_byte,
+            BodyEntry::Include { span, .. } => span.start_byte,
+            BodyEntry::Field(field) => field.span.start_byte,
+        }
+    }
+}
+
+fn body_entries(body: &ObjectBody) -> Vec<BodyEntry<'_>> {
+    let mut entries = Vec::with_capacity(body.spreads.len() + body.members.len());
+    entries.extend(body.spreads.iter().map(BodyEntry::Spread));
+    for member in &body.members {
+        match member {
+            LocalMember::Include {
+                path,
+                path_span,
+                span,
+                ..
+            } => entries.push(BodyEntry::Include {
+                path,
+                path_span,
+                span,
+            }),
+            LocalMember::Field(field) => entries.push(BodyEntry::Field(field)),
+        }
+    }
+    entries
+}
+
+fn field_uses_equals(source: &str, field: &crate::ast::Field) -> bool {
+    source
+        .get(field.path_span.end_byte..field.value_start_byte())
+        .is_some_and(|text| text.contains('='))
+}
+
+fn field_header_span(source: &str, field: &crate::ast::Field) -> Span {
+    let end_byte = source
+        .get(field.path_span.end_byte..field.span.end_byte)
+        .and_then(|text| text.find('{'))
+        .map(|offset| field.path_span.end_byte + offset + 1)
+        .unwrap_or(field.path_span.end_byte);
+    Span::new(field.span.start_byte, end_byte)
+}
+
+trait AstValueExt {
+    fn start_byte(&self) -> usize;
+}
+
+impl AstValueExt for AstValue {
+    fn start_byte(&self) -> usize {
+        match self {
+            AstValue::Object { span, .. }
+            | AstValue::Array { span, .. }
+            | AstValue::String { span, .. }
+            | AstValue::Number { span, .. }
+            | AstValue::Bool { span, .. }
+            | AstValue::Null { span }
+            | AstValue::Substitution { span, .. } => span.start_byte,
+        }
+    }
+}
+
+trait FieldExt {
+    fn value_start_byte(&self) -> usize;
+}
+
+impl FieldExt for crate::ast::Field {
+    fn value_start_byte(&self) -> usize {
+        self.value.start_byte()
+    }
+}
+
+fn array_item_start(item: &ArrayItem) -> usize {
+    array_item_span(item).start_byte
+}
+
+fn array_item_span(item: &ArrayItem) -> Span {
+    match item {
+        ArrayItem::Value(value) => match value {
+            AstValue::Object { span, .. }
+            | AstValue::Array { span, .. }
+            | AstValue::String { span, .. }
+            | AstValue::Number { span, .. }
+            | AstValue::Bool { span, .. }
+            | AstValue::Null { span }
+            | AstValue::Substitution { span, .. } => *span,
+        },
+        ArrayItem::Spread { span, .. } => *span,
+    }
+}
+
+fn format_substitution(path: &SconPath) -> String {
+    format!("${{{}}}", format_path(path))
+}
+
+fn format_path(path: &SconPath) -> String {
+    path.iter()
+        .map(|segment| {
+            if is_unquoted_key(segment) {
+                segment.clone()
+            } else {
+                format_string_literal(segment)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+fn is_unquoted_key(segment: &str) -> bool {
+    let mut chars = segment.chars();
+    let Some(first) = chars.next() else {
+        return false;
     };
-    let left = line[..eq].trim_end();
-    let right = line[eq + 1..].trim_start();
-    format!("{left} = {right}")
+    (first.is_ascii_alphabetic() || first == '_')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
 }
 
-fn starts_with_closer(line: &str) -> bool {
-    matches!(line.as_bytes().first(), Some(b'}' | b']'))
-}
-
-fn opens_block(line: &str) -> bool {
-    let code = strip_inline_comment(line).trim_end();
-    code.ends_with('{') || code.ends_with('[')
-}
-
-fn strip_inline_comment(line: &str) -> &str {
-    let mut in_string = false;
-    let mut escaped = false;
-    let bytes = line.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        let byte = bytes[i];
-        if escaped {
-            escaped = false;
-            i += 1;
-            continue;
-        }
-        match byte {
-            b'\\' if in_string => escaped = true,
-            b'"' => in_string = !in_string,
-            b'#' if !in_string => return &line[..i],
-            b'/' if !in_string && bytes.get(i + 1) == Some(&b'/') => return &line[..i],
-            _ => {}
-        }
-        i += 1;
-    }
-    line
-}
-
-fn find_unquoted(line: &str, target: u8) -> Option<usize> {
-    let mut in_string = false;
-    let mut escaped = false;
-    for (index, byte) in line.bytes().enumerate() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        match byte {
-            b'\\' if in_string => escaped = true,
-            b'"' => in_string = !in_string,
-            byte if byte == target && !in_string => return Some(index),
-            b'#' if !in_string => return None,
-            b'/' if !in_string && line.as_bytes().get(index + 1) == Some(&b'/') => return None,
-            _ => {}
+fn format_string_literal(text: &str) -> String {
+    let mut out = String::from("\"");
+    for ch in text.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            ch if ch.is_control() => {
+                use std::fmt::Write;
+                let _ = write!(out, "\\u{:04x}", ch as u32);
+            }
+            ch => out.push(ch),
         }
     }
-    None
+    out.push('"');
+    out
 }
 
 fn collect_symbols(
@@ -781,10 +1046,4 @@ fn parse_path_query(path: &str) -> Result<Vec<String>> {
         return Err(Error::new(ErrorCode::UnexpectedToken, "empty path"));
     }
     Ok(parts)
-}
-
-fn write_spaces(out: &mut String, count: usize) {
-    for _ in 0..count {
-        out.push(' ');
-    }
 }

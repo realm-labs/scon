@@ -256,6 +256,63 @@ url="http://${defaults.host}"
     }
 
     #[test]
+    fn format_source_uses_ast_trivia_golden_output() {
+        let formatted = format_source(
+            r#"
+# leading
+include "./base.scon"
+defaults { // inline
+host="127.0.0.1"
+}
+server {
+...${defaults}
+paths=[...${base_paths},"/opt/bin"]
+url="http://${defaults.host}" // url
+}
+"#,
+            FormatOptions::default(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            formatted,
+            r#"# leading
+include "./base.scon"
+defaults { // inline
+  host = "127.0.0.1"
+}
+server {
+  ...${defaults}
+  paths = [
+    ...${base_paths},
+    "/opt/bin"
+  ]
+  url = "http://${defaults.host}" // url
+}
+"#
+        );
+    }
+
+    #[test]
+    fn format_source_round_trips_resolved_value() {
+        let source = r#"
+defaults {
+host = "127.0.0.1"
+}
+base_paths = ["/bin", "/usr/bin"]
+server {
+...${defaults}
+paths = [...${base_paths}, "/opt/bin"]
+url = "http://${defaults.host}"
+}
+"#;
+
+        let formatted = format_source(source, FormatOptions::default()).unwrap();
+        parse_source(&formatted, ParseOptions::default()).unwrap();
+        assert_eq!(parse_str(source).unwrap(), parse_str(&formatted).unwrap());
+    }
+
+    #[test]
     fn line_index_maps_utf8_and_utf16_positions() {
         let source = "name = \"\u{1F980}\"\nnext = 1\n";
         let index = LineIndex::new(source);

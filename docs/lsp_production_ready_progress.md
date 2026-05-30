@@ -25,7 +25,7 @@ Update this document after each milestone is complete. Commit the update togethe
 | --- | --- | --- | --- |
 | M1: Core Source Model | Complete | 90ede09 | Span-aware AST, line index, token/comment collection, parser-backed symbols. |
 | M2: Production Analysis API | Complete | 6c2e5fc | Structured diagnostics, definitions, references, include references, and source-store analysis. |
-| M3: AST/Trivia Source Formatter | Not started |  |  |
+| M3: AST/Trivia Source Formatter | Complete | pending | AST-walk source formatter with token comment preservation and round-trip tests. |
 | M4: LSP Architecture Refactor | Not started |  |  |
 | M5: Production Diagnostics And Formatting | Not started |  |  |
 | M6: Completion, Hover, Definition, Symbols | Not started |  |  |
@@ -52,11 +52,11 @@ Update this document after each milestone is complete. Commit the update togethe
 
 ### M3: AST/Trivia Source Formatter
 
-- Status: Not started
-- Summary:
-- Checks:
-- Commit:
-- Follow-up:
+- Status: Complete
+- Summary: Replaced the line-based source formatter with an AST-walk formatter that preserves comments, include directives, object/array spreads, substitutions, source order by span sorting, and keeps resolved canonical formatting separate.
+- Checks: `cargo fmt --check`; `cargo test --workspace --exclude scon-fuzz`; `cargo clippy --workspace --exclude scon-fuzz --all-targets -- -D warnings`; `cargo +nightly fuzz run format_source -- -runs=10000`
+- Commit: pending
+- Follow-up: M4 should split `scon-lsp` into structured server/state/config/feature modules and consume the structured core APIs instead of ad hoc scans.
 
 ### M4: LSP Architecture Refactor
 
