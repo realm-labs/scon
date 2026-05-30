@@ -1,0 +1,56 @@
+<idea-plugin>
+    <id>io.github.realmlabs.scon</id>
+    <name>SCON</name>
+    <vendor url="https://github.com/realm-labs">Realm Labs</vendor>
+
+    <description><![CDATA[
+        Native SCON language support for IntelliJ-based IDEs.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lang</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <fileType
+            name="SCON"
+            implementationClass="io.github.realmlabs.scon.idea.SconFileType"
+            fieldName="INSTANCE"
+            extensions="scon"/>
+        <lang.syntaxHighlighterFactory
+            language="SCON"
+            implementationClass="io.github.realmlabs.scon.idea.SconSyntaxHighlighterFactory"/>
+        <lang.parserDefinition
+            language="SCON"
+            implementationClass="io.github.realmlabs.scon.idea.SconParserDefinition"/>
+        <lang.commenter
+            language="SCON"
+            implementationClass="io.github.realmlabs.scon.idea.SconCommenter"/>
+        <lang.braceMatcher
+            language="SCON"
+            implementationClass="io.github.realmlabs.scon.idea.SconBraceMatcher"/>
+        <annotator
+            language="SCON"
+            implementationClass="io.github.realmlabs.scon.idea.SconAnnotator"/>
+        <completion.contributor
+            language="SCON"
+            implementationClass="io.github.realmlabs.scon.idea.SconCompletionContributor"/>
+        <gotoDeclarationHandler
+            implementationClass="io.github.realmlabs.scon.idea.SconGotoDeclarationHandler"/>
+        <lang.documentationProvider
+            language="SCON"
+            implementationClass="io.github.realmlabs.scon.idea.SconDocumentationProvider"/>
+        <lang.psiStructureViewFactory
+            language="SCON"
+            implementationClass="io.github.realmlabs.scon.idea.SconStructureViewFactory"/>
+    </extensions>
+
+    <actions>
+        <action
+            id="Scon.FormatFile"
+            class="io.github.realmlabs.scon.idea.SconFormatFileAction"
+            text="Format SCON File"
+            description="Format the current SCON file with the shared Kotlin SCON formatter">
+            <add-to-group group-id="CodeMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
