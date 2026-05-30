@@ -5,7 +5,6 @@ mod de;
 mod error;
 mod eval;
 mod format;
-mod lexer;
 mod limits;
 mod loader;
 mod parser;
@@ -22,14 +21,16 @@ pub fn from_str<T>(source: &str) -> Result<T>
 where
     T: serde::de::DeserializeOwned,
 {
-    from_value(parse_str(source)?)
+    let doc = parser::parse_str(source, None)?;
+    let resolved = eval::eval_resolved_document(doc, &mut loader::NoopLoader)?;
+    de::from_resolved(&resolved)
 }
 
 pub fn from_file<T>(path: impl AsRef<Path>) -> Result<T>
 where
     T: serde::de::DeserializeOwned,
 {
-    from_value(parse_file(path)?)
+    from_file_with_options(path, LoadOptions::default())
 }
 
 pub fn to_string<T>(value: &T) -> Result<String>
@@ -42,7 +43,7 @@ where
 
 pub fn parse_str(source: &str) -> Result<Value> {
     let doc = parser::parse_str(source, None)?;
-    eval::eval_document(&doc, &mut loader::NoopLoader)
+    eval::eval_document(doc, &mut loader::NoopLoader)
 }
 
 pub fn parse_file(path: impl AsRef<Path>) -> Result<Value> {
@@ -52,14 +53,17 @@ pub fn parse_file(path: impl AsRef<Path>) -> Result<Value> {
 pub fn parse_file_with_options(path: impl AsRef<Path>, options: LoadOptions) -> Result<Value> {
     let mut loader = loader::FileLoader::new(path.as_ref(), options)?;
     let doc = loader.load_entry()?;
-    eval::eval_document(&doc, &mut loader)
+    eval::eval_document(doc, &mut loader)
 }
 
 pub fn from_file_with_options<T>(path: impl AsRef<Path>, options: LoadOptions) -> Result<T>
 where
     T: serde::de::DeserializeOwned,
 {
-    from_value(parse_file_with_options(path, options)?)
+    let mut loader = loader::FileLoader::new(path.as_ref(), options)?;
+    let doc = loader.load_entry()?;
+    let resolved = eval::eval_resolved_document(doc, &mut loader)?;
+    de::from_resolved(&resolved)
 }
 
 pub fn to_value<T>(value: &T) -> Result<Value>
@@ -176,6 +180,33 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(err.code, ErrorCode::MissingReference);
+    }
+
+    #[test]
+    fn rejects_space_separated_object_members() {
+        let err = parse_str(
+            r#"
+            a = 1 b = 2
+            "#,
+        )
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::UnexpectedToken);
+    }
+
+    #[test]
+    fn accepts_crlf_and_rejects_standalone_cr() {
+        let value = parse_str("a = 1\r\nb = 2\r\n").unwrap();
+        let Value::Object(root) = value else {
+            panic!("expected object root");
+        };
+        assert_eq!(root["a"], Value::Number("1".to_string()));
+        assert_eq!(root["b"], Value::Number("2".to_string()));
+
+        let err = parse_str("a = 1\rb = 2").unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidCharacter);
+
+        let err = parse_str("a = \r\n1").unwrap_err();
+        assert_eq!(err.code, ErrorCode::UnexpectedToken);
     }
 
     #[test]

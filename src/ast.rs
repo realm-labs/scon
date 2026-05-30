@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+pub type SconPath = smallvec::SmallVec<[String; 2]>;
+
 #[derive(Clone, Debug)]
 pub struct Location {
     pub file: Option<PathBuf>,
@@ -21,7 +23,7 @@ pub struct ObjectBody {
 
 #[derive(Clone, Debug)]
 pub struct ObjectSpread {
-    pub path: Vec<String>,
+    pub path: SconPath,
     pub loc: Location,
 }
 
@@ -33,7 +35,7 @@ pub enum LocalMember {
 
 #[derive(Clone, Debug)]
 pub struct Field {
-    pub path: Vec<String>,
+    pub path: SconPath,
     pub value: AstValue,
     pub loc: Location,
 }
@@ -42,21 +44,27 @@ pub struct Field {
 pub enum AstValue {
     Object(ObjectBody),
     Array(Vec<ArrayItem>),
-    String(Vec<StringPart>),
+    String(StringValue),
     Number(String),
     Bool(bool),
     Null,
-    Substitution(Vec<String>),
+    Substitution(SconPath),
 }
 
 #[derive(Clone, Debug)]
 pub enum StringPart {
     Literal(String),
-    Interpolation(Vec<String>),
+    Interpolation(SconPath),
+}
+
+#[derive(Clone, Debug)]
+pub enum StringValue {
+    Literal(String),
+    Parts(Vec<StringPart>),
 }
 
 #[derive(Clone, Debug)]
 pub enum ArrayItem {
     Value(AstValue),
-    Spread { path: Vec<String>, loc: Location },
+    Spread { path: SconPath, loc: Location },
 }

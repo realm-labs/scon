@@ -2,25 +2,25 @@ use std::path::PathBuf;
 
 use crate::ast::*;
 use crate::error::{Error, ErrorCode, Result};
-use crate::lexer;
 
 pub(crate) fn parse_str(source: &str, file: Option<PathBuf>) -> Result<Document> {
-    let normalized = lexer::normalize_source(source, file.clone())?;
-    Parser::new(&normalized, file).parse_document()
+    Parser::new(source, file).parse_document()
 }
 
-struct Parser {
-    chars: Vec<char>,
+struct Parser<'a> {
+    source: &'a str,
+    bytes: &'a [u8],
     pos: usize,
     line: usize,
     column: usize,
     file: Option<PathBuf>,
 }
 
-impl Parser {
-    fn new(source: &str, file: Option<PathBuf>) -> Self {
+impl<'a> Parser<'a> {
+    fn new(source: &'a str, file: Option<PathBuf>) -> Self {
         Self {
-            chars: source.chars().collect(),
+            source,
+            bytes: source.as_bytes(),
             pos: 0,
             line: 1,
             column: 1,
@@ -30,12 +30,12 @@ impl Parser {
 
     fn parse_document(mut self) -> Result<Document> {
         self.skip_ws_comments()?;
-        let body = if self.peek() == Some('{') {
+        let body = if self.peek() == Some(b'{') {
             self.bump();
-            let body = self.parse_object_body(Some('}'))?;
-            self.expect('}')?;
+            let body = self.parse_object_body(Some(b'}'))?;
+            self.expect(b'}')?;
             body
-        } else if matches!(self.peek(), Some('[') | Some('-') | Some('0'..='9')) {
+        } else if matches!(self.peek(), Some(b'[' | b'-' | b'0'..=b'9')) {
             return Err(self.err(
                 ErrorCode::InvalidRootType,
                 "SCON document root must be an object",
@@ -56,18 +56,15 @@ impl Parser {
         })
     }
 
-    fn parse_object_body(&mut self, terminator: Option<char>) -> Result<ObjectBody> {
+    fn parse_object_body(&mut self, terminator: Option<u8>) -> Result<ObjectBody> {
         let mut body = ObjectBody::default();
         let mut locals_seen = false;
         loop {
-            let saw_newline = self.skip_ws_comments()?;
+            self.skip_ws_comments()?;
             if self.is_eof() || terminator.is_some_and(|t| self.peek() == Some(t)) {
                 break;
             }
-            if saw_newline {
-                // A newline may separate members; parsing continues below.
-            }
-            if self.starts_with("...") {
+            if self.peek() == Some(b'.') && self.starts_with(b"...") {
                 if locals_seen {
                     return Err(self.err(
                         ErrorCode::InvalidSpread,
@@ -75,7 +72,7 @@ impl Parser {
                     ));
                 }
                 let loc = self.loc();
-                self.consume("...");
+                self.consume(b"...");
                 self.skip_inline_ws();
                 let path = self.parse_substitution()?;
                 body.spreads.push(ObjectSpread { path, loc });
@@ -84,11 +81,11 @@ impl Parser {
                 body.members.push(self.parse_local_member()?);
             }
 
-            let saw_newline = self.skip_ws_comments()?;
-            if self.peek() == Some(',') {
+            let saw_newline_after_member = self.skip_ws_comments()?;
+            if self.peek() == Some(b',') {
                 self.bump();
                 self.skip_ws_comments()?;
-                if self.peek() == Some(',') {
+                if self.peek() == Some(b',') {
                     return Err(
                         self.err(ErrorCode::UnexpectedToken, "consecutive commas are invalid")
                     );
@@ -98,7 +95,7 @@ impl Parser {
             if self.is_eof() || terminator.is_some_and(|t| self.peek() == Some(t)) {
                 break;
             }
-            if saw_newline {
+            if saw_newline_after_member {
                 continue;
             }
             return Err(self.err(
@@ -110,11 +107,11 @@ impl Parser {
     }
 
     fn parse_local_member(&mut self) -> Result<LocalMember> {
-        if self.starts_with_keyword("include") {
+        if self.peek() == Some(b'i') && self.starts_with_keyword(b"include") {
             let checkpoint = (self.pos, self.line, self.column);
             let loc = self.loc();
-            self.consume("include");
-            if matches!(self.peek(), Some(' ' | '\t')) {
+            self.consume(b"include");
+            if matches!(self.peek(), Some(b' ' | b'\t')) {
                 self.skip_inline_ws();
                 let path = self.parse_string_no_interpolation()?;
                 return Ok(LocalMember::Include { path, loc });
@@ -128,23 +125,36 @@ impl Parser {
         let path = self.parse_path()?;
         self.skip_inline_ws();
         let value = match self.peek() {
-            Some('=') => {
+            Some(b'=') => {
                 self.bump();
                 self.skip_inline_ws();
-                if self.peek() == Some('\n') || self.is_eof() {
-                    return Err(self.err(
-                        ErrorCode::UnexpectedToken,
-                        "field value must be on the same logical line as =",
-                    ));
+                match self.peek() {
+                    None | Some(b'\n') => {
+                        return Err(self.err(
+                            ErrorCode::UnexpectedToken,
+                            "field value must be on the same logical line as =",
+                        ));
+                    }
+                    Some(b'\r') if self.peek_n(1) == Some(b'\n') => {
+                        return Err(self.err(
+                            ErrorCode::UnexpectedToken,
+                            "field value must be on the same logical line as =",
+                        ));
+                    }
+                    Some(b'\r') => {
+                        return Err(
+                            self.err(ErrorCode::InvalidCharacter, "standalone CR is invalid")
+                        );
+                    }
+                    _ => {}
                 }
                 self.parse_value()?
             }
-            Some('{') => {
+            Some(b'{') => {
                 self.bump();
-                AstValue::Object(self.parse_object_body(Some('}')).and_then(|b| {
-                    self.expect('}')?;
-                    Ok(b)
-                })?)
+                let body = self.parse_object_body(Some(b'}'))?;
+                self.expect(b'}')?;
+                AstValue::Object(body)
             }
             _ => {
                 return Err(self.err(
@@ -159,48 +169,47 @@ impl Parser {
     fn parse_value(&mut self) -> Result<AstValue> {
         self.skip_inline_ws();
         match self.peek() {
-            Some('{') => {
+            Some(b'{') => {
                 self.bump();
-                let body = self.parse_object_body(Some('}'))?;
-                self.expect('}')?;
+                let body = self.parse_object_body(Some(b'}'))?;
+                self.expect(b'}')?;
                 Ok(AstValue::Object(body))
             }
-            Some('[') => self.parse_array(),
-            Some('"') => Ok(AstValue::String(self.parse_string_parts(true)?)),
-            Some('$') if self.peek_n(1) == Some('{') => {
+            Some(b'[') => self.parse_array(),
+            Some(b'"') => Ok(AstValue::String(self.parse_string_value(true)?)),
+            Some(b'$') if self.peek_n(1) == Some(b'{') => {
                 Ok(AstValue::Substitution(self.parse_substitution()?))
             }
-            Some('-' | '0'..='9') => Ok(AstValue::Number(self.parse_number()?)),
-            Some('t') if self.starts_with_keyword("true") => {
-                self.consume("true");
+            Some(b'-' | b'0'..=b'9') => Ok(AstValue::Number(self.parse_number()?)),
+            Some(b't') if self.starts_with_keyword(b"true") => {
+                self.consume(b"true");
                 Ok(AstValue::Bool(true))
             }
-            Some('f') if self.starts_with_keyword("false") => {
-                self.consume("false");
+            Some(b'f') if self.starts_with_keyword(b"false") => {
+                self.consume(b"false");
                 Ok(AstValue::Bool(false))
             }
-            Some('n') if self.starts_with_keyword("null") => {
-                self.consume("null");
+            Some(b'n') if self.starts_with_keyword(b"null") => {
+                self.consume(b"null");
                 Ok(AstValue::Null)
             }
-            Some(_) => Err(self.err(ErrorCode::UnexpectedToken, "expected value")),
-            None => Err(self.err(ErrorCode::UnexpectedToken, "expected value")),
+            Some(_) | None => Err(self.err(ErrorCode::UnexpectedToken, "expected value")),
         }
     }
 
     fn parse_array(&mut self) -> Result<AstValue> {
-        self.expect('[')?;
+        self.expect(b'[')?;
         let mut items = Vec::new();
         self.skip_ws_comments()?;
-        if self.peek() == Some(']') {
+        if self.peek() == Some(b']') {
             self.bump();
             return Ok(AstValue::Array(items));
         }
         loop {
             self.skip_ws_comments()?;
-            if self.starts_with("...") {
+            if self.peek() == Some(b'.') && self.starts_with(b"...") {
                 let loc = self.loc();
-                self.consume("...");
+                self.consume(b"...");
                 self.skip_inline_ws();
                 let path = self.parse_substitution()?;
                 items.push(ArrayItem::Spread { path, loc });
@@ -209,20 +218,20 @@ impl Parser {
             }
             self.skip_ws_comments()?;
             match self.peek() {
-                Some(',') => {
+                Some(b',') => {
                     self.bump();
                     self.skip_ws_comments()?;
-                    if self.peek() == Some(',') {
+                    if self.peek() == Some(b',') {
                         return Err(
                             self.err(ErrorCode::UnexpectedToken, "consecutive commas are invalid")
                         );
                     }
-                    if self.peek() == Some(']') {
+                    if self.peek() == Some(b']') {
                         self.bump();
                         break;
                     }
                 }
-                Some(']') => {
+                Some(b']') => {
                     self.bump();
                     break;
                 }
@@ -237,9 +246,10 @@ impl Parser {
         Ok(AstValue::Array(items))
     }
 
-    fn parse_path(&mut self) -> Result<Vec<String>> {
-        let mut path = vec![self.parse_path_segment()?];
-        while self.peek() == Some('.') {
+    fn parse_path(&mut self) -> Result<SconPath> {
+        let mut path = SconPath::new();
+        path.push(self.parse_path_segment()?);
+        while self.peek() == Some(b'.') {
             self.bump();
             path.push(self.parse_path_segment()?);
         }
@@ -248,102 +258,139 @@ impl Parser {
 
     fn parse_path_segment(&mut self) -> Result<String> {
         match self.peek() {
-            Some('"') => self.parse_string_no_interpolation(),
+            Some(b'"') => self.parse_string_no_interpolation(),
             Some(ch) if is_ident_start(ch) => {
-                let mut out = String::new();
-                out.push(self.bump().unwrap());
-                while let Some(ch) = self.peek() {
-                    if is_ident_continue(ch) {
-                        out.push(self.bump().unwrap());
-                    } else {
-                        break;
-                    }
-                }
-                Ok(out)
+                let start = self.pos;
+                self.bump();
+                self.skip_ident_continue();
+                Ok(self.source[start..self.pos].to_string())
             }
             _ => Err(self.err(ErrorCode::UnexpectedToken, "expected path segment")),
         }
     }
 
-    fn parse_substitution(&mut self) -> Result<Vec<String>> {
-        self.expect('$')?;
-        self.expect('{')?;
+    fn parse_substitution(&mut self) -> Result<SconPath> {
+        self.expect(b'$')?;
+        self.expect(b'{')?;
         let path = self.parse_path()?;
-        self.expect('}')?;
+        self.expect(b'}')?;
         Ok(path)
     }
 
     fn parse_string_no_interpolation(&mut self) -> Result<String> {
-        let parts = self.parse_string_parts(false)?;
-        let mut out = String::new();
-        for part in parts {
-            match part {
-                StringPart::Literal(text) => out.push_str(&text),
-                StringPart::Interpolation(_) => {
-                    return Err(self.err(
-                        ErrorCode::UnexpectedToken,
-                        "interpolation is not allowed here",
-                    ));
+        match self.parse_string_value(false)? {
+            StringValue::Literal(text) => Ok(text),
+            StringValue::Parts(parts) => {
+                let mut out = String::new();
+                for part in parts {
+                    match part {
+                        StringPart::Literal(text) => out.push_str(&text),
+                        StringPart::Interpolation(_) => {
+                            return Err(self.err(
+                                ErrorCode::UnexpectedToken,
+                                "interpolation is not allowed here",
+                            ));
+                        }
+                    }
                 }
+                Ok(out)
             }
         }
-        Ok(out)
     }
 
-    fn parse_string_parts(&mut self, allow_interpolation: bool) -> Result<Vec<StringPart>> {
-        self.expect('"')?;
+    fn parse_string_value(&mut self, allow_interpolation: bool) -> Result<StringValue> {
+        self.expect(b'"')?;
         let mut parts = Vec::new();
         let mut literal = String::new();
+        let mut had_interpolation = false;
+        let mut segment_start = self.pos;
         loop {
-            match self.bump() {
-                Some('"') => break,
-                Some('\\') => match self.bump() {
-                    Some('"') => literal.push('"'),
-                    Some('\\') => literal.push('\\'),
-                    Some('/') => literal.push('/'),
-                    Some('b') => literal.push('\u{0008}'),
-                    Some('f') => literal.push('\u{000c}'),
-                    Some('n') => literal.push('\n'),
-                    Some('r') => literal.push('\r'),
-                    Some('t') => literal.push('\t'),
-                    Some('$') => literal.push('$'),
-                    Some('u') => literal.push(self.parse_unicode_escape()?),
-                    _ => return Err(self.err(ErrorCode::InvalidEscape, "invalid string escape")),
-                },
-                Some('$') if self.peek() == Some('{') => {
+            self.skip_string_literal_bytes();
+            match self.peek() {
+                Some(b'"') => {
+                    if !had_interpolation && literal.is_empty() {
+                        let text = self.source[segment_start..self.pos].to_string();
+                        self.bump();
+                        return Ok(StringValue::Literal(text));
+                    }
+                    literal.push_str(&self.source[segment_start..self.pos]);
+                    self.bump();
+                    if !had_interpolation {
+                        return Ok(StringValue::Literal(literal));
+                    }
+                    break;
+                }
+                Some(b'\\') => {
+                    literal.push_str(&self.source[segment_start..self.pos]);
+                    self.bump();
+                    match self.bump() {
+                        Some(b'"') => literal.push('"'),
+                        Some(b'\\') => literal.push('\\'),
+                        Some(b'/') => literal.push('/'),
+                        Some(b'b') => literal.push('\u{0008}'),
+                        Some(b'f') => literal.push('\u{000c}'),
+                        Some(b'n') => literal.push('\n'),
+                        Some(b'r') => literal.push('\r'),
+                        Some(b't') => literal.push('\t'),
+                        Some(b'$') => literal.push('$'),
+                        Some(b'u') => literal.push(self.parse_unicode_escape()?),
+                        _ => {
+                            return Err(self.err(ErrorCode::InvalidEscape, "invalid string escape"));
+                        }
+                    }
+                    segment_start = self.pos;
+                }
+                Some(b'$') if self.peek_n(1) == Some(b'{') => {
                     if !allow_interpolation {
                         return Err(self.err(
                             ErrorCode::UnexpectedToken,
                             "interpolation is not allowed here",
                         ));
                     }
+                    literal.push_str(&self.source[segment_start..self.pos]);
                     if !literal.is_empty() {
                         parts.push(StringPart::Literal(std::mem::take(&mut literal)));
                     }
+                    had_interpolation = true;
+                    self.bump();
                     self.bump();
                     let path = self.parse_path()?;
-                    self.expect('}')?;
+                    self.expect(b'}')?;
                     parts.push(StringPart::Interpolation(path));
+                    segment_start = self.pos;
                 }
-                Some('\n') => {
+                Some(b'\n') => {
                     return Err(self.err(
                         ErrorCode::UnterminatedString,
                         "multiline strings are not supported",
                     ));
                 }
-                Some(ch) if ch.is_control() => {
+                Some(b'\r') if self.peek_n(1) == Some(b'\n') => {
+                    return Err(self.err(
+                        ErrorCode::UnterminatedString,
+                        "multiline strings are not supported",
+                    ));
+                }
+                Some(b'\r') => {
+                    return Err(self.err(ErrorCode::InvalidCharacter, "standalone CR is invalid"));
+                }
+                Some(ch) if ch < 0x20 => {
                     return Err(
                         self.err(ErrorCode::InvalidCharacter, "control character in string")
                     );
                 }
-                Some(ch) => literal.push(ch),
+                Some(_) => {
+                    self.bump_char().ok_or_else(|| {
+                        self.err(ErrorCode::UnterminatedString, "unterminated string")
+                    })?;
+                }
                 None => return Err(self.err(ErrorCode::UnterminatedString, "unterminated string")),
             }
         }
-        if !literal.is_empty() || parts.is_empty() {
+        if !literal.is_empty() {
             parts.push(StringPart::Literal(literal));
         }
-        Ok(parts)
+        Ok(StringValue::Parts(parts))
     }
 
     fn parse_unicode_escape(&mut self) -> Result<char> {
@@ -353,7 +400,7 @@ impl Parser {
                 return Err(self.err(ErrorCode::InvalidEscape, "incomplete unicode escape"));
             };
             value = value * 16
-                + ch.to_digit(16)
+                + hex_value(ch)
                     .ok_or_else(|| self.err(ErrorCode::InvalidEscape, "invalid unicode escape"))?;
         }
         char::from_u32(value)
@@ -362,80 +409,87 @@ impl Parser {
 
     fn parse_number(&mut self) -> Result<String> {
         let start = self.pos;
-        if self.peek() == Some('-') {
+        if self.peek() == Some(b'-') {
             self.bump();
         }
         match self.peek() {
-            Some('0') => {
+            Some(b'0') => {
                 self.bump();
-                if matches!(self.peek(), Some('0'..='9')) {
+                if matches!(self.peek(), Some(b'0'..=b'9')) {
                     return Err(self.err(ErrorCode::InvalidNumber, "leading zeroes are invalid"));
                 }
             }
-            Some('1'..='9') => {
+            Some(b'1'..=b'9') => {
                 self.bump();
-                while matches!(self.peek(), Some('0'..='9')) {
-                    self.bump();
-                }
+                self.skip_ascii_digits();
             }
             _ => return Err(self.err(ErrorCode::InvalidNumber, "invalid number")),
         }
-        if self.peek() == Some('.') {
+        if self.peek() == Some(b'.') {
             self.bump();
-            if !matches!(self.peek(), Some('0'..='9')) {
+            if !matches!(self.peek(), Some(b'0'..=b'9')) {
                 return Err(self.err(ErrorCode::InvalidNumber, "fraction requires digits"));
             }
-            while matches!(self.peek(), Some('0'..='9')) {
-                self.bump();
-            }
+            self.skip_ascii_digits();
         }
-        if matches!(self.peek(), Some('e' | 'E')) {
+        if matches!(self.peek(), Some(b'e' | b'E')) {
             self.bump();
-            if matches!(self.peek(), Some('+' | '-')) {
+            if matches!(self.peek(), Some(b'+' | b'-')) {
                 self.bump();
             }
-            if !matches!(self.peek(), Some('0'..='9')) {
+            if !matches!(self.peek(), Some(b'0'..=b'9')) {
                 return Err(self.err(ErrorCode::InvalidNumber, "exponent requires digits"));
             }
-            while matches!(self.peek(), Some('0'..='9')) {
-                self.bump();
-            }
+            self.skip_ascii_digits();
         }
-        Ok(self.chars[start..self.pos].iter().collect())
+        Ok(self.source[start..self.pos].to_string())
     }
 
     fn skip_inline_ws(&mut self) {
-        while matches!(self.peek(), Some(' ' | '\t')) {
-            self.bump();
+        let start = self.pos;
+        while self
+            .bytes
+            .get(self.pos)
+            .is_some_and(|ch| matches!(ch, b' ' | b'\t'))
+        {
+            self.pos += 1;
         }
+        self.column += self.pos - start;
     }
 
     fn skip_ws_comments(&mut self) -> Result<bool> {
         let mut saw_newline = false;
         loop {
             match self.peek() {
-                Some(' ' | '\t') => {
-                    self.bump();
+                Some(b' ' | b'\t') => {
+                    self.skip_inline_ws();
                 }
-                Some('\n') => {
+                Some(b'\n') => {
                     saw_newline = true;
-                    self.bump();
+                    self.consume_newline()?;
                 }
-                Some('#') => {
+                Some(b'\r') => {
+                    saw_newline = true;
+                    self.consume_newline()?;
+                }
+                Some(b'#') => {
                     self.skip_line_comment();
                 }
-                Some('/') if self.peek_n(1) == Some('/') => {
+                Some(b'/') if self.peek_n(1) == Some(b'/') => {
                     self.skip_line_comment();
                 }
-                Some(ch) if ch.is_whitespace() => {
-                    // Parser input has already rejected CR. Other non-SCON whitespace is invalid.
+                Some(byte) if byte >= 0x80 => {
                     let loc = self.loc();
-                    self.bump();
-                    return Err(Error::new(
-                        ErrorCode::InvalidWhitespace,
-                        format!("invalid whitespace character U+{:04X}", ch as u32),
-                    )
-                    .at(loc));
+                    let ch = self.bump_char().expect("valid UTF-8 boundary");
+                    if ch.is_whitespace() {
+                        return Err(Error::new(
+                            ErrorCode::InvalidWhitespace,
+                            format!("invalid whitespace character U+{:04X}", ch as u32),
+                        )
+                        .at(loc));
+                    }
+                    self.rewind_char(ch);
+                    break;
                 }
                 _ => break,
             }
@@ -444,54 +498,64 @@ impl Parser {
     }
 
     fn skip_line_comment(&mut self) {
-        while let Some(ch) = self.peek() {
-            if ch == '\n' {
-                break;
-            }
-            self.bump();
+        let start = self.pos;
+        while self
+            .bytes
+            .get(self.pos)
+            .is_some_and(|ch| !matches!(ch, b'\n' | b'\r'))
+        {
+            self.pos += 1;
         }
+        self.column += self.pos - start;
     }
 
-    fn starts_with_keyword(&self, s: &str) -> bool {
-        self.starts_with(s)
-            && !self
-                .peek_n(s.chars().count())
-                .is_some_and(is_ident_continue)
+    fn starts_with_keyword(&self, s: &[u8]) -> bool {
+        self.starts_with(s) && !self.peek_n(s.len()).is_some_and(is_ident_continue)
     }
 
-    fn starts_with(&self, s: &str) -> bool {
-        s.chars()
-            .enumerate()
-            .all(|(i, ch)| self.peek_n(i) == Some(ch))
+    fn starts_with(&self, s: &[u8]) -> bool {
+        self.bytes[self.pos..].starts_with(s)
     }
 
-    fn consume(&mut self, s: &str) {
-        for _ in s.chars() {
-            self.bump();
-        }
+    fn consume(&mut self, s: &[u8]) {
+        debug_assert!(self.starts_with(s));
+        self.pos += s.len();
+        self.column += s.len();
     }
 
-    fn expect(&mut self, expected: char) -> Result<()> {
+    fn expect(&mut self, expected: u8) -> Result<()> {
         match self.bump() {
             Some(ch) if ch == expected => Ok(()),
             _ => Err(self.err(
                 ErrorCode::UnexpectedToken,
-                format!("expected '{}'", expected),
+                format!("expected '{}'", expected as char),
             )),
         }
     }
 
-    fn peek(&self) -> Option<char> {
-        self.chars.get(self.pos).copied()
+    fn peek(&self) -> Option<u8> {
+        self.bytes.get(self.pos).copied()
     }
 
-    fn peek_n(&self, n: usize) -> Option<char> {
-        self.chars.get(self.pos + n).copied()
+    fn peek_n(&self, n: usize) -> Option<u8> {
+        self.bytes.get(self.pos + n).copied()
     }
 
-    fn bump(&mut self) -> Option<char> {
+    fn bump(&mut self) -> Option<u8> {
         let ch = self.peek()?;
         self.pos += 1;
+        if ch == b'\n' {
+            self.line += 1;
+            self.column = 1;
+        } else {
+            self.column += 1;
+        }
+        Some(ch)
+    }
+
+    fn bump_char(&mut self) -> Option<char> {
+        let ch = self.source[self.pos..].chars().next()?;
+        self.pos += ch.len_utf8();
         if ch == '\n' {
             self.line += 1;
             self.column = 1;
@@ -501,8 +565,74 @@ impl Parser {
         Some(ch)
     }
 
+    fn skip_ident_continue(&mut self) {
+        let start = self.pos;
+        while self
+            .bytes
+            .get(self.pos)
+            .is_some_and(|ch| is_ident_continue(*ch))
+        {
+            self.pos += 1;
+        }
+        self.column += self.pos - start;
+    }
+
+    fn skip_ascii_digits(&mut self) {
+        let start = self.pos;
+        while self
+            .bytes
+            .get(self.pos)
+            .is_some_and(|ch| ch.is_ascii_digit())
+        {
+            self.pos += 1;
+        }
+        self.column += self.pos - start;
+    }
+
+    fn skip_string_literal_bytes(&mut self) {
+        let start = self.pos;
+        while let Some(byte) = self.bytes.get(self.pos).copied() {
+            match byte {
+                b'"' | b'\\' | b'\n' | b'\r' | 0x00..=0x1f => break,
+                b'$' if self.peek_n(1) == Some(b'{') => break,
+                0x80..=0xff => break,
+                _ => self.pos += 1,
+            }
+        }
+        self.column += self.pos - start;
+    }
+
+    fn consume_newline(&mut self) -> Result<()> {
+        match self.peek() {
+            Some(b'\n') => {
+                self.pos += 1;
+                self.line += 1;
+                self.column = 1;
+                Ok(())
+            }
+            Some(b'\r') if self.peek_n(1) == Some(b'\n') => {
+                self.pos += 2;
+                self.line += 1;
+                self.column = 1;
+                Ok(())
+            }
+            Some(b'\r') => Err(self.err(ErrorCode::InvalidCharacter, "standalone CR is invalid")),
+            _ => unreachable!("consume_newline called away from a newline"),
+        }
+    }
+
+    fn rewind_char(&mut self, ch: char) {
+        self.pos -= ch.len_utf8();
+        if ch == '\n' {
+            self.line -= 1;
+            self.column = 1;
+        } else {
+            self.column -= 1;
+        }
+    }
+
     fn is_eof(&self) -> bool {
-        self.pos >= self.chars.len()
+        self.pos >= self.bytes.len()
     }
 
     fn loc(&self) -> Location {
@@ -518,10 +648,19 @@ impl Parser {
     }
 }
 
-fn is_ident_start(ch: char) -> bool {
-    ch.is_ascii_alphabetic() || ch == '_'
+fn is_ident_start(ch: u8) -> bool {
+    ch.is_ascii_alphabetic() || ch == b'_'
 }
 
-fn is_ident_continue(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || ch == '_' || ch == '-'
+fn is_ident_continue(ch: u8) -> bool {
+    ch.is_ascii_alphanumeric() || ch == b'_' || ch == b'-'
+}
+
+fn hex_value(ch: u8) -> Option<u32> {
+    match ch {
+        b'0'..=b'9' => Some((ch - b'0') as u32),
+        b'a'..=b'f' => Some((ch - b'a' + 10) as u32),
+        b'A'..=b'F' => Some((ch - b'A' + 10) as u32),
+        _ => None,
+    }
 }
