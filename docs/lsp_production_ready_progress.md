@@ -23,7 +23,7 @@ Update this document after each milestone is complete. Commit the update togethe
 
 | Milestone | Status | Commit | Notes |
 | --- | --- | --- | --- |
-| M1: Core Source Model | Complete | pending | Span-aware AST, line index, token/comment collection, parser-backed symbols. |
+| M1: Core Source Model | Complete | 90ede09 | Span-aware AST, line index, token/comment collection, parser-backed symbols. |
 | M2: Production Analysis API | Not started |  |  |
 | M3: AST/Trivia Source Formatter | Not started |  |  |
 | M4: LSP Architecture Refactor | Not started |  |  |
@@ -39,7 +39,7 @@ Update this document after each milestone is complete. Commit the update togethe
 - Status: Complete
 - Summary: Added byte spans to tooling-relevant AST nodes, introduced UTF-8/UTF-16 `LineIndex` mapping, added token/trivia/comment collection, and replaced heuristic analysis comments/symbols with parser-backed data.
 - Checks: `cargo fmt --check`; `cargo test --workspace --exclude scon-fuzz`; `cargo clippy --workspace --exclude scon-fuzz --all-targets -- -D warnings`
-- Commit: pending
+- Commit: 90ede09
 - Follow-up: M2 should build structured references, definitions, include-aware diagnostics, and document-store-backed analysis on top of these spans.
 
 ### M2: Production Analysis API
