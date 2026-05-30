@@ -6,10 +6,11 @@ release signing secrets are configured.
 ## Local Verification
 
 ```sh
-./gradlew :kotlin:scon-core:test
-./gradlew :editors:idea:test
-./gradlew :editors:idea:buildPlugin
-./gradlew :editors:idea:verifyPlugin
+cd kotlin
+./gradlew :scon-core:test
+./gradlew :idea-plugin:test
+./gradlew :idea-plugin:buildPlugin
+./gradlew :idea-plugin:verifyPlugin
 ```
 
 Install the generated zip from `editors/idea/build/distributions/` into a clean
@@ -35,8 +36,9 @@ Set these environment variables outside the repository:
 Then run:
 
 ```sh
-./gradlew :editors:idea:signPlugin
-./gradlew :editors:idea:publishPlugin
+cd kotlin
+./gradlew :idea-plugin:signPlugin
+./gradlew :idea-plugin:publishPlugin
 ```
 
 Do not commit certificates, private keys, tokens, generated plugin zips, or

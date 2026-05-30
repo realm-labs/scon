@@ -23,8 +23,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "scon"
 
-include(":kotlin:scon-core")
-include(":editors:idea")
+include(":scon-core")
+include(":idea-plugin")
 
-project(":kotlin:scon-core").projectDir = file("kotlin/scon-core")
-project(":editors:idea").projectDir = file("editors/idea")
+project(":scon-core").projectDir = file("scon-core")
+project(":idea-plugin").projectDir = file("../editors/idea")

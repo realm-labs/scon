@@ -28,6 +28,7 @@
 ## Useful Local Checks
 
 ```sh
+cd rust
 cargo fmt --check
 cargo test --workspace --exclude scon-fuzz
 cargo clippy --workspace --exclude scon-fuzz --all-targets -- -D warnings

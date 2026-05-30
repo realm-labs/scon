@@ -6,6 +6,12 @@ Install `cargo-fuzz` once:
 cargo install cargo-fuzz
 ```
 
+Run fuzz commands from the Rust package root:
+
+```sh
+cd rust
+```
+
 Run the parser target:
 
 ```sh

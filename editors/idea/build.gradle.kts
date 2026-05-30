@@ -6,7 +6,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":kotlin:scon-core"))
+    implementation(project(":scon-core"))
 
     intellijPlatform {
         intellijIdeaCommunity("2024.2.5")

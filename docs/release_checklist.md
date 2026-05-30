@@ -5,6 +5,7 @@ Use the same version for `scon-core`, `scon-cli`, and `scon-lsp` during early `0
 ## Required Checks
 
 ```sh
+cd rust
 cargo fmt --check
 cargo test --workspace --exclude scon-fuzz
 cargo clippy --workspace --exclude scon-fuzz --all-targets -- -D warnings

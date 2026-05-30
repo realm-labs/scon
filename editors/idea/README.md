@@ -6,12 +6,13 @@ not use `scon-lsp` or LSP4IJ. Shared SCON language behavior belongs in
 syntax highlighting, diagnostics, completion, navigation, documentation,
 structure view, editor integration, and packaging.
 
-Useful commands from the repository root:
+Useful commands from the Kotlin build root:
 
 ```sh
-./gradlew :editors:idea:runIde
-./gradlew :editors:idea:buildPlugin
-./gradlew :editors:idea:verifyPlugin
+cd kotlin
+./gradlew :idea-plugin:runIde
+./gradlew :idea-plugin:buildPlugin
+./gradlew :idea-plugin:verifyPlugin
 ```
 
 Marketplace publishing uses environment variables for signing and upload

@@ -97,7 +97,7 @@ impl<T, E> UnwrapErrOrElse<T, E> for Result<T, E> {
 
 fn conformance_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/conformance")
+        .join("../../../tests/conformance")
         .canonicalize()
         .expect("conformance fixture directory should exist")
 }

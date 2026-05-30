@@ -7,12 +7,13 @@
 Build from this workspace:
 
 ```sh
-cargo install --path crates/scon-lsp
+cargo install --path rust/crates/scon-lsp
 ```
 
 Or build release binaries:
 
 ```sh
+cd rust
 cargo build --workspace --exclude scon-fuzz --release
 ```
 

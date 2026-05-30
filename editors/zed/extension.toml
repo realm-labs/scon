@@ -9,7 +9,7 @@ repository = "https://github.com/realm-labs/scon"
 [grammars.scon]
 repository = "https://github.com/realm-labs/scon"
 rev = "master"
-path = "tree-sitter-scon"
+path = "editors/tree-sitter-scon"
 
 [language_servers.scon-lsp]
 name = "SCON Language Server"

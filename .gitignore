@@ -1,9 +1,1 @@
-/target
-/.gradle
 /.idea
-/.intellijPlatform
-/build
-/**/build
-/fuzz/artifacts
-/fuzz/coverage
-/fuzz/corpus/*/.cur_input
