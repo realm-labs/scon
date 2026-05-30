@@ -1,38 +1,149 @@
 {
   "scopeName": "source.scon",
+  "name": "SCON",
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
+    { "include": "#substitutions" },
     { "include": "#numbers" },
     { "include": "#keywords" },
-    { "include": "#substitutions" }
+    { "include": "#keys" },
+    { "include": "#operators" },
+    { "include": "#punctuation" }
   ],
   "repository": {
     "comments": {
       "patterns": [
-        { "name": "comment.line.number-sign.scon", "match": "#.*$" },
-        { "name": "comment.line.double-slash.scon", "match": "//.*$" }
+        {
+          "name": "comment.line.number-sign.scon",
+          "match": "#.*$"
+        },
+        {
+          "name": "comment.line.double-slash.scon",
+          "match": "//.*$"
+        }
       ]
     },
     "strings": {
       "patterns": [
-        { "name": "string.quoted.double.scon", "begin": "\"", "end": "\"", "patterns": [{ "match": "\\\\.", "name": "constant.character.escape.scon" }] }
-      ]
-    },
-    "numbers": {
-      "patterns": [
-        { "name": "constant.numeric.scon", "match": "-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?" }
-      ]
-    },
-    "keywords": {
-      "patterns": [
-        { "name": "keyword.control.include.scon", "match": "\\binclude\\b" },
-        { "name": "constant.language.scon", "match": "\\b(true|false|null)\\b" }
+        {
+          "name": "string.quoted.double.scon",
+          "begin": "\"",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.scon" }
+          },
+          "end": "\"",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.scon" }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.scon",
+              "match": "\\\\(?:[\"\\\\/bfnrt$]|u[0-9A-Fa-f]{4})"
+            },
+            {
+              "include": "#substitutions"
+            },
+            {
+              "name": "invalid.illegal.escape.scon",
+              "match": "\\\\."
+            }
+          ]
+        }
       ]
     },
     "substitutions": {
       "patterns": [
-        { "name": "variable.other.substitution.scon", "match": "\\$\\{[^}]+\\}" }
+        {
+          "name": "variable.other.substitution.scon",
+          "begin": "\\$\\{",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.variable.begin.scon" }
+          },
+          "end": "\\}",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.variable.end.scon" }
+          },
+          "patterns": [
+            { "include": "#path_segments" },
+            { "include": "#operators" }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.scon",
+          "match": "(?<![A-Za-z0-9_-])-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?(?![A-Za-z0-9_-])"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.include.scon",
+          "match": "\\binclude\\b"
+        },
+        {
+          "name": "constant.language.boolean.scon",
+          "match": "\\b(?:true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.scon",
+          "match": "\\bnull\\b"
+        }
+      ]
+    },
+    "keys": {
+      "patterns": [
+        {
+          "name": "entity.name.tag.key.scon",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_-]*\\b(?=\\s*(?:\\.|=|\\{))"
+        }
+      ]
+    },
+    "path_segments": {
+      "patterns": [
+        {
+          "name": "variable.other.member.scon",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_-]*\\b"
+        },
+        {
+          "include": "#strings"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.spread.scon",
+          "match": "\\.\\.\\."
+        },
+        {
+          "name": "keyword.operator.assignment.scon",
+          "match": "="
+        },
+        {
+          "name": "punctuation.accessor.dot.scon",
+          "match": "\\."
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.section.braces.scon",
+          "match": "[{}]"
+        },
+        {
+          "name": "punctuation.section.brackets.scon",
+          "match": "[\\[\\]]"
+        },
+        {
+          "name": "punctuation.separator.comma.scon",
+          "match": ","
+        }
       ]
     }
   }

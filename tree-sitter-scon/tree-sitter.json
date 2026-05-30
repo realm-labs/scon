@@ -1,0 +1,31 @@
+{
+  "grammars": [
+    {
+      "name": "scon",
+      "camelcase": "SCON",
+      "scope": "source.scon",
+      "path": ".",
+      "file-types": ["scon"],
+      "highlights": "queries/highlights.scm",
+      "brackets": "queries/brackets.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Tree-sitter grammar for SCON",
+    "authors": [
+      {
+        "name": "Realm Labs"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/realm-labs/scon"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "node": true,
+    "rust": true
+  }
+}

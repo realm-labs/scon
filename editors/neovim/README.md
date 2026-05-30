@@ -1,5 +1,9 @@
 # SCON Neovim Setup
 
+This directory includes filetype detection and Vim syntax highlighting for
+`.scon` files. Put `editors/neovim` on your runtime path, or install it through
+your preferred plugin manager.
+
 Install `scon-lsp` on your `PATH`, then configure `nvim-lspconfig`:
 
 ```lua

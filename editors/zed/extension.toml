@@ -6,6 +6,11 @@ authors = ["Realm Labs"]
 description = "SCON language support powered by scon-lsp."
 repository = "https://github.com/realm-labs/scon"
 
+[grammars.scon]
+repository = "https://github.com/realm-labs/scon"
+rev = "master"
+path = "tree-sitter-scon"
+
 [language_servers.scon-lsp]
 name = "SCON Language Server"
 languages = ["SCON"]

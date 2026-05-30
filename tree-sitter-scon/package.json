@@ -1,0 +1,17 @@
+{
+  "name": "tree-sitter-scon",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for SCON",
+  "main": "grammar.js",
+  "keywords": ["tree-sitter", "scon"],
+  "license": "MIT",
+  "devDependencies": {
+    "tree-sitter-cli": "^0.25.0"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.scon",
+      "file-types": ["scon"]
+    }
+  ]
+}

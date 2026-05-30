@@ -3,3 +3,10 @@ grammar = "scon"
 path_suffixes = ["scon"]
 line_comments = ["# ", "// "]
 language_servers = ["scon-lsp"]
+tab_size = 2
+
+brackets = [
+  { start = "{", end = "}", close = true, newline = true },
+  { start = "[", end = "]", close = true, newline = true },
+  { start = "\"", end = "\"", close = true, newline = false },
+]

@@ -2,6 +2,11 @@
 
 Install `scon-lsp` on your `PATH`, or configure Zed to use an explicit binary path when your local extension wiring supports it.
 
+The extension provides `.scon` file association, Tree-sitter syntax
+highlighting, bracket matching, comment toggling, and LSP wiring. The
+Tree-sitter grammar is stored in the repository under `tree-sitter-scon` and is
+registered from `extension.toml`.
+
 Supported server settings:
 
 ```json
