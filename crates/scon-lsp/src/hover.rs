@@ -19,11 +19,32 @@ pub async fn hover(state: &Mutex<WorkspaceState>, params: HoverParams) -> LspRes
         return Ok(None);
     };
 
+    if let Some(diagnostic) = analysis.diagnostics.iter().find(|diagnostic| {
+        diagnostic
+            .range
+            .as_ref()
+            .is_some_and(|range| contains_byte(range, byte))
+    }) {
+        return Ok(Some(Hover {
+            contents: HoverContents::Scalar(MarkedString::String(format!(
+                "{:?}: {}",
+                diagnostic.code, diagnostic.message
+            ))),
+            range: diagnostic.range.as_ref().map(crate::position::to_lsp_range),
+        }));
+    }
+
     if let Some(reference) = analysis
         .references
         .iter()
         .find(|reference| contains_byte(&reference.range, byte))
     {
+        let preview = reference
+            .target
+            .as_ref()
+            .and_then(|target| value_preview(&analysis, &target.path))
+            .map(|preview| format!(" = {preview}"))
+            .unwrap_or_default();
         let target = reference
             .target
             .as_ref()
@@ -34,7 +55,7 @@ pub async fn hover(state: &Mutex<WorkspaceState>, params: HoverParams) -> LspRes
                 "SCON {:?} `{}`{}",
                 reference.kind,
                 reference.path.join("."),
-                target
+                target + &preview
             ))),
             range: None,
         }));
@@ -49,9 +70,33 @@ pub async fn hover(state: &Mutex<WorkspaceState>, params: HoverParams) -> LspRes
     };
     Ok(Some(Hover {
         contents: HoverContents::Scalar(MarkedString::String(format!(
-            "SCON field `{}`",
-            definition.path.join(".")
+            "SCON field `{}`{}",
+            definition.path.join("."),
+            value_preview(&analysis, &definition.path)
+                .map(|preview| format!(" = {preview}"))
+                .unwrap_or_default()
         ))),
         range: None,
     }))
+}
+
+fn value_preview(analysis: &scon::AnalyzedDocument, path: &[String]) -> Option<String> {
+    let value = analysis.value.as_ref()?;
+    let value = scon::get_path(value, &path.join(".")).ok()?;
+    Some(format!(
+        "{} {}",
+        value_type(value),
+        scon::to_string_fragment(value)
+    ))
+}
+
+fn value_type(value: &scon::Value) -> &'static str {
+    match value {
+        scon::Value::Null => "null",
+        scon::Value::Bool(_) => "bool",
+        scon::Value::Number(_) => "number",
+        scon::Value::String(_) => "string",
+        scon::Value::Array(_) => "array",
+        scon::Value::Object(_) => "object",
+    }
 }

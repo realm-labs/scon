@@ -28,7 +28,7 @@ Update this document after each milestone is complete. Commit the update togethe
 | M3: AST/Trivia Source Formatter | Complete | 923eee3 | AST-walk source formatter with token comment preservation and round-trip tests. |
 | M4: LSP Architecture Refactor | Complete | d931d4d | Split LSP into server/state/config/feature modules backed by core analysis. |
 | M5: Production Diagnostics And Formatting | Complete | 107978e | Precise reference diagnostics, include-location errors, dependent reanalysis tests, and parseable formatting tests. |
-| M6: Completion, Hover, Definition, Symbols | Not started |  |  |
+| M6: Completion, Hover, Definition, Symbols | Complete | pending | Semantic completion, hover previews, include definition, and nested symbols. |
 | M7: Configuration, Robustness, And Editor Integration | Not started |  |  |
 | M8: Release Readiness | Not started |  |  |
 
@@ -76,11 +76,11 @@ Update this document after each milestone is complete. Commit the update togethe
 
 ### M6: Completion, Hover, Definition, Symbols
 
-- Status: Not started
-- Summary:
-- Checks:
-- Commit:
-- Follow-up:
+- Status: Complete
+- Summary: Added analysis-derived path/reference completion, include path completion, keyword completion, hover diagnostics and resolved value previews, include go-to-definition, and nested document symbols with stable ranges.
+- Checks: `cargo fmt --check`; `cargo test --workspace --exclude scon-fuzz`; `cargo clippy --workspace --exclude scon-fuzz --all-targets -- -D warnings`
+- Commit: pending
+- Follow-up: M7 should wire user/workspace configuration, robustness behavior, and editor frontend integration details.
 
 ### M7: Configuration, Robustness, And Editor Integration
 
