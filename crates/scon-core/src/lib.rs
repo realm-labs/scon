@@ -1,5 +1,6 @@
 #![allow(clippy::result_large_err)]
 
+mod analysis;
 mod ast;
 mod de;
 mod error;
@@ -13,9 +14,16 @@ mod value;
 
 use std::path::Path;
 
+pub use analysis::{
+    Analysis, Comment, CommentKind, Diagnostic, FormatOptions, ParseOptions, ParsedDocument,
+    SourcePosition, SourceRange, Symbol, analyze_file, analyze_source, diagnostic_from_error,
+    format_source, get_path, parse_source, resolve_file, resolve_source,
+};
 pub use error::{Error, ErrorCode, Result};
 pub use limits::{Limits, LoadOptions};
 pub use value::Value;
+
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn from_str<T>(source: &str) -> Result<T>
 where
@@ -39,6 +47,14 @@ where
 {
     let value = to_value(value)?;
     format::to_string(&value)
+}
+
+pub fn to_string_value(value: &Value) -> Result<String> {
+    format::to_string(value)
+}
+
+pub fn to_string_fragment(value: &Value) -> String {
+    format::to_fragment_string(value)
 }
 
 pub fn parse_str(source: &str) -> Result<Value> {
@@ -207,6 +223,29 @@ mod tests {
 
         let err = parse_str("a = \r\n1").unwrap_err();
         assert_eq!(err.code, ErrorCode::UnexpectedToken);
+    }
+
+    #[test]
+    fn format_source_preserves_comments_and_composition() {
+        let formatted = format_source(
+            r#"
+# leading
+defaults { // inline
+host="127.0.0.1"
+}
+server {
+...${defaults}
+url="http://${defaults.host}"
+}
+"#,
+            FormatOptions::default(),
+        )
+        .unwrap();
+
+        assert!(formatted.contains("# leading"));
+        assert!(formatted.contains("// inline"));
+        assert!(formatted.contains("...${defaults}"));
+        assert!(formatted.contains("url = \"http://${defaults.host}\""));
     }
 
     #[test]

@@ -1,0 +1,13 @@
+[package]
+name = "scon-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "scon"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+scon = { package = "scon-core", path = "../scon-core" }
+serde_json = "1"

@@ -1,0 +1,61 @@
+{
+  "name": "scon-vscode",
+  "displayName": "SCON",
+  "description": "SCON language support powered by scon-lsp.",
+  "version": "0.1.0",
+  "publisher": "realm-labs",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Programming Languages"],
+  "activationEvents": ["onLanguage:scon"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "scon",
+        "aliases": ["SCON", "scon"],
+        "extensions": [".scon"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "scon",
+        "scopeName": "source.scon",
+        "path": "./syntaxes/scon.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "SCON",
+      "properties": {
+        "scon.server.path": {
+          "type": "string",
+          "default": "scon-lsp",
+          "description": "Path to the scon-lsp executable."
+        },
+        "scon.format.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable formatting through scon-lsp."
+        },
+        "scon.includeRoot": {
+          "type": "string",
+          "default": "",
+          "description": "Optional include root passed to future server configuration."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

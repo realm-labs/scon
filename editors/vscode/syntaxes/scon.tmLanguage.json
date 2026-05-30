@@ -1,0 +1,39 @@
+{
+  "scopeName": "source.scon",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#substitutions" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.number-sign.scon", "match": "#.*$" },
+        { "name": "comment.line.double-slash.scon", "match": "//.*$" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        { "name": "string.quoted.double.scon", "begin": "\"", "end": "\"", "patterns": [{ "match": "\\\\.", "name": "constant.character.escape.scon" }] }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.scon", "match": "-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?" }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        { "name": "keyword.control.include.scon", "match": "\\binclude\\b" },
+        { "name": "constant.language.scon", "match": "\\b(true|false|null)\\b" }
+      ]
+    },
+    "substitutions": {
+      "patterns": [
+        { "name": "variable.other.substitution.scon", "match": "\\$\\{[^}]+\\}" }
+      ]
+    }
+  }
+}

@@ -1,0 +1,5 @@
+name = "SCON"
+grammar = "scon"
+path_suffixes = ["scon"]
+line_comments = ["# ", "// "]
+language_servers = ["scon-lsp"]

@@ -14,6 +14,13 @@ pub(crate) fn to_string(value: &Value) -> Result<String> {
     Ok(out)
 }
 
+pub(crate) fn to_fragment_string(value: &Value) -> String {
+    let mut out = String::new();
+    write_value(&mut out, value, 0);
+    out.push('\n');
+    out
+}
+
 fn write_object_body(out: &mut String, object: &indexmap::IndexMap<String, Value>, indent: usize) {
     for (key, value) in object {
         write_indent(out, indent);

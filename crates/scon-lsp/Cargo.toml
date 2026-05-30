@@ -1,0 +1,13 @@
+[package]
+name = "scon-lsp"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "scon-lsp"
+path = "src/main.rs"
+
+[dependencies]
+scon = { package = "scon-core", path = "../scon-core" }
+tokio = { version = "1", features = ["io-std", "macros", "rt-multi-thread", "sync"] }
+tower-lsp = "0.20"
