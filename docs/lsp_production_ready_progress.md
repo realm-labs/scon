@@ -27,7 +27,7 @@ Update this document after each milestone is complete. Commit the update togethe
 | M2: Production Analysis API | Complete | 6c2e5fc | Structured diagnostics, definitions, references, include references, and source-store analysis. |
 | M3: AST/Trivia Source Formatter | Complete | 923eee3 | AST-walk source formatter with token comment preservation and round-trip tests. |
 | M4: LSP Architecture Refactor | Complete | d931d4d | Split LSP into server/state/config/feature modules backed by core analysis. |
-| M5: Production Diagnostics And Formatting | Complete | pending | Precise reference diagnostics, include-location errors, dependent reanalysis tests, and parseable formatting tests. |
+| M5: Production Diagnostics And Formatting | Complete | 107978e | Precise reference diagnostics, include-location errors, dependent reanalysis tests, and parseable formatting tests. |
 | M6: Completion, Hover, Definition, Symbols | Not started |  |  |
 | M7: Configuration, Robustness, And Editor Integration | Not started |  |  |
 | M8: Release Readiness | Not started |  |  |
@@ -71,7 +71,7 @@ Update this document after each milestone is complete. Commit the update togethe
 - Status: Complete
 - Summary: Hardened diagnostics by using substitution/interpolation spans during evaluation, attaching include load failures to include directives, reanalyzing reverse dependencies from open-document state, and testing full-document formatting output parses.
 - Checks: `cargo fmt --check`; `cargo test --workspace --exclude scon-fuzz`; `cargo clippy --workspace --exclude scon-fuzz --all-targets -- -D warnings`
-- Commit: pending
+- Commit: 107978e
 - Follow-up: M6 should expand semantic editor features for path-aware completion, hover previews, include go-to-definition, and nested document symbols.
 
 ### M6: Completion, Hover, Definition, Symbols
