@@ -4,6 +4,25 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      fuzz_target:
+        description: "Fuzz target to run"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - parse_str
+          - format_source
+      fuzz_runs:
+        description: "Number of libFuzzer runs per fuzz target"
+        required: false
+        default: "1000"
+      fuzz_seconds:
+        description: "Optional max seconds per fuzz target; overrides fuzz_runs when set"
+        required: false
+        default: ""
 
 jobs:
   rust:
@@ -12,6 +31,42 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo fmt --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
-      - run: cargo build --workspace --release
+      - run: cargo clippy --workspace --exclude scon-fuzz --all-targets -- -D warnings
+      - run: cargo test --workspace --exclude scon-fuzz
+      - run: cargo build --workspace --exclude scon-fuzz --release
+
+  fuzz-smoke:
+    runs-on: ubuntu-latest
+    env:
+      FUZZ_TARGET: ${{ github.event.inputs.fuzz_target || 'all' }}
+      FUZZ_RUNS: ${{ github.event.inputs.fuzz_runs || '1000' }}
+      FUZZ_SECONDS: ${{ github.event.inputs.fuzz_seconds || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-fuzz --locked
+      - name: Run fuzz smoke
+        run: |
+          if [ -n "${FUZZ_SECONDS}" ]; then
+            FUZZ_ARGS="-max_total_time=${FUZZ_SECONDS}"
+          else
+            FUZZ_ARGS="-runs=${FUZZ_RUNS}"
+          fi
+
+          run_target() {
+            cargo +nightly fuzz run "$1" -- ${FUZZ_ARGS}
+          }
+
+          case "${FUZZ_TARGET}" in
+            all)
+              run_target parse_str
+              run_target format_source
+              ;;
+            parse_str|format_source)
+              run_target "${FUZZ_TARGET}"
+              ;;
+            *)
+              echo "unknown fuzz target: ${FUZZ_TARGET}" >&2
+              exit 2
+              ;;
+          esac

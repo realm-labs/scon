@@ -1,0 +1,10 @@
+defaults {
+  host = "127.0.0.1"
+  port = 8080
+}
+server {
+  ...${defaults}
+  port = 9090
+}
+base = [1, 2]
+values = [...${base}, 3]

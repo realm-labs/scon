@@ -1,3 +1,4 @@
 [workspace]
-members = ["crates/scon-core", "crates/scon-cli", "crates/scon-lsp"]
+members = ["crates/scon-core", "crates/scon-cli", "crates/scon-lsp", "fuzz"]
+default-members = ["crates/scon-core", "crates/scon-cli", "crates/scon-lsp"]
 resolver = "3"

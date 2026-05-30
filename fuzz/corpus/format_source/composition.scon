@@ -1,0 +1,7 @@
+defaults {
+host="127.0.0.1"
+}
+server {
+...${defaults}
+url="http://${defaults.host}"
+}
