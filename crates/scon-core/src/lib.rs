@@ -10,17 +10,19 @@ mod limits;
 mod loader;
 mod parser;
 mod ser;
+mod source;
 mod value;
 
 use std::path::Path;
 
 pub use analysis::{
     Analysis, Comment, CommentKind, Diagnostic, FormatOptions, ParseOptions, ParsedDocument,
-    SourcePosition, SourceRange, Symbol, analyze_file, analyze_source, diagnostic_from_error,
-    format_source, get_path, parse_source, resolve_file, resolve_source,
+    SourcePosition, SourceRange, Symbol, Utf16Position, analyze_file, analyze_source,
+    diagnostic_from_error, format_source, get_path, parse_source, resolve_file, resolve_source,
 };
 pub use error::{Error, ErrorCode, Result};
 pub use limits::{Limits, LoadOptions};
+pub use source::{LineIndex, Token, TokenKind};
 pub use value::Value;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -246,6 +248,63 @@ url="http://${defaults.host}"
         assert!(formatted.contains("// inline"));
         assert!(formatted.contains("...${defaults}"));
         assert!(formatted.contains("url = \"http://${defaults.host}\""));
+    }
+
+    #[test]
+    fn line_index_maps_utf8_and_utf16_positions() {
+        let source = "name = \"\u{1F980}\"\nnext = 1\n";
+        let index = LineIndex::new(source);
+        let crab = '\u{1F980}';
+        let crab_byte = source.find(crab).unwrap();
+
+        let source_position = index.source_position(source, crab_byte);
+        assert_eq!(source_position.line, 0);
+        assert_eq!(source_position.character, 8);
+        assert_eq!(index.byte_for_line_character(source, 0, 8), Some(crab_byte));
+
+        let after_crab = crab_byte + crab.len_utf8();
+        let utf16 = index.utf16_position(source, after_crab);
+        assert_eq!(utf16.line, 0);
+        assert_eq!(utf16.character, 10);
+        assert_eq!(
+            index.byte_for_utf16_position(source, 0, 10),
+            Some(after_crab)
+        );
+        assert_eq!(index.byte_for_utf16_position(source, 0, 9), None);
+    }
+
+    #[test]
+    fn parse_source_exposes_parser_backed_comments_tokens_and_symbols() {
+        let parsed = parse_source(
+            r#"
+# leading
+server {
+  host = "127.0.0.1" // inline
+}
+"#,
+            ParseOptions::default(),
+        )
+        .unwrap();
+
+        assert_eq!(parsed.comments.len(), 2);
+        assert!(
+            parsed
+                .tokens
+                .iter()
+                .any(|token| matches!(token.kind, TokenKind::Comment(_)))
+        );
+        assert!(
+            parsed
+                .symbols
+                .iter()
+                .any(|symbol| symbol.path == vec!["server"])
+        );
+        assert!(
+            parsed
+                .symbols
+                .iter()
+                .any(|symbol| symbol.path == vec!["server", "host"])
+        );
     }
 
     #[test]

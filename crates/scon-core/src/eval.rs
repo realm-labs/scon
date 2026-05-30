@@ -56,7 +56,7 @@ pub(crate) fn eval_resolved_document(
         root: EvalObject::default(),
         in_progress: vec![Vec::new()],
     };
-    let Document { body, file } = doc;
+    let Document { body, file, .. } = doc;
     evaluator.eval_contents(body, &[], file.as_deref(), loader)?;
     evaluator.in_progress.pop();
     Ok(ResolvedDocument {
@@ -105,11 +105,13 @@ impl Evaluator {
                 LocalMember::Include {
                     path: include_path,
                     loc,
+                    ..
                 } => {
                     let included = loader.load_include(file, &include_path, loc.clone())?;
                     let Document {
                         body: included_body,
                         file: included_file,
+                        ..
                     } = included;
                     self.eval_contents(included_body, path, included_file.as_deref(), loader)?;
                 }
@@ -130,6 +132,7 @@ impl Evaluator {
             path: field_path,
             value,
             loc,
+            ..
         } = field;
         let target_path: Cow<'_, [String]> = if current_path.is_empty() {
             Cow::Borrowed(field_path.as_slice())
@@ -140,7 +143,7 @@ impl Evaluator {
             Cow::Owned(target_path)
         };
         match value {
-            AstValue::Object(body) => {
+            AstValue::Object { body, .. } => {
                 ensure_local_object(&mut self.root, target_path.as_ref(), &loc)?;
                 self.in_progress.push(target_path.as_ref().to_vec());
                 self.eval_contents(body, target_path.as_ref(), file, loader)?;
@@ -172,7 +175,7 @@ impl Evaluator {
 
     fn eval_value(&mut self, value: AstValue) -> Result<EvalValue> {
         match value {
-            AstValue::Object(body) => {
+            AstValue::Object { body, .. } => {
                 let mut nested = Evaluator {
                     root: EvalObject::default(),
                     in_progress: vec![Vec::new()],
@@ -181,12 +184,12 @@ impl Evaluator {
                 nested.eval_contents(body, &[], None, &mut crate::loader::NoopLoader)?;
                 Ok(EvalValue::Object(nested.root))
             }
-            AstValue::Array(items) => {
+            AstValue::Array { items, .. } => {
                 let mut out = Vec::with_capacity(items.len());
                 for item in items {
                     match item {
                         ArrayItem::Value(value) => out.push(self.eval_value(value)?),
-                        ArrayItem::Spread { path, loc } => {
+                        ArrayItem::Spread { path, loc, .. } => {
                             let target = self.lookup_completed_entry(path.as_slice(), &loc)?;
                             let EvalValue::Array(values) = &target.value else {
                                 return Err(Error::new(
@@ -203,20 +206,21 @@ impl Evaluator {
                 }
                 Ok(EvalValue::Array(out))
             }
-            AstValue::String(string) => match string {
+            AstValue::String { value: string, .. } => match string {
                 StringValue::Literal(text) => Ok(EvalValue::String(text)),
                 StringValue::Parts(parts) => {
                     let mut out = String::new();
                     for part in parts {
                         match part {
                             StringPart::Literal(text) => out.push_str(&text),
-                            StringPart::Interpolation(path) => {
+                            StringPart::Interpolation { path, .. } => {
                                 let value = self.lookup_completed_entry(
                                     path.as_slice(),
                                     &Location {
                                         file: None,
                                         line: 1,
                                         column: 1,
+                                        span: Span::default(),
                                     },
                                 )?;
                                 match &value.value {
@@ -239,15 +243,16 @@ impl Evaluator {
                     Ok(EvalValue::String(out))
                 }
             },
-            AstValue::Number(text) => Ok(EvalValue::Number(text)),
-            AstValue::Bool(value) => Ok(EvalValue::Bool(value)),
-            AstValue::Null => Ok(EvalValue::Null),
-            AstValue::Substitution(path) => self.lookup_completed(
+            AstValue::Number { value: text, .. } => Ok(EvalValue::Number(text)),
+            AstValue::Bool { value, .. } => Ok(EvalValue::Bool(value)),
+            AstValue::Null { .. } => Ok(EvalValue::Null),
+            AstValue::Substitution { path, .. } => self.lookup_completed(
                 path.as_slice(),
                 &Location {
                     file: None,
                     line: 1,
                     column: 1,
+                    span: Span::default(),
                 },
             ),
         }

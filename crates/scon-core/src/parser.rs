@@ -7,6 +7,11 @@ pub(crate) fn parse_str(source: &str, file: Option<PathBuf>) -> Result<Document>
     Parser::new(source, file).parse_document()
 }
 
+struct ParsedPath {
+    path: SconPath,
+    span: Span,
+}
+
 struct Parser<'a> {
     source: &'a str,
     bytes: &'a [u8],
@@ -29,6 +34,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_document(mut self) -> Result<Document> {
+        let start = self.pos;
         self.skip_ws_comments()?;
         let body = if self.peek() == Some(b'{') {
             self.bump();
@@ -53,10 +59,12 @@ impl<'a> Parser<'a> {
         Ok(Document {
             body,
             file: self.file,
+            span: Span::new(start, self.pos),
         })
     }
 
     fn parse_object_body(&mut self, terminator: Option<u8>) -> Result<ObjectBody> {
+        let start = self.pos;
         let mut body = ObjectBody::default();
         let mut locals_seen = false;
         loop {
@@ -71,11 +79,17 @@ impl<'a> Parser<'a> {
                         "object spread must appear before local members",
                     ));
                 }
+                let member_start = self.pos;
                 let loc = self.loc();
                 self.consume(b"...");
                 self.skip_inline_ws();
                 let path = self.parse_substitution()?;
-                body.spreads.push(ObjectSpread { path, loc });
+                body.spreads.push(ObjectSpread {
+                    path: path.path,
+                    path_span: path.span,
+                    loc,
+                    span: Span::new(member_start, self.pos),
+                });
             } else {
                 locals_seen = true;
                 body.members.push(self.parse_local_member()?);
@@ -103,18 +117,26 @@ impl<'a> Parser<'a> {
                 "object members must be separated by newline or comma",
             ));
         }
+        body.span = Span::new(start, self.pos);
         Ok(body)
     }
 
     fn parse_local_member(&mut self) -> Result<LocalMember> {
+        let member_start = self.pos;
         if self.peek() == Some(b'i') && self.starts_with_keyword(b"include") {
             let checkpoint = (self.pos, self.line, self.column);
             let loc = self.loc();
             self.consume(b"include");
             if matches!(self.peek(), Some(b' ' | b'\t')) {
                 self.skip_inline_ws();
+                let path_start = self.pos;
                 let path = self.parse_string_no_interpolation()?;
-                return Ok(LocalMember::Include { path, loc });
+                return Ok(LocalMember::Include {
+                    path,
+                    path_span: Span::new(path_start, self.pos),
+                    loc,
+                    span: Span::new(member_start, self.pos),
+                });
             }
             self.pos = checkpoint.0;
             self.line = checkpoint.1;
@@ -154,7 +176,10 @@ impl<'a> Parser<'a> {
                 self.bump();
                 let body = self.parse_object_body(Some(b'}'))?;
                 self.expect(b'}')?;
-                AstValue::Object(body)
+                AstValue::Object {
+                    body,
+                    span: Span::new(path.span.start_byte, self.pos),
+                }
             }
             _ => {
                 return Err(self.err(
@@ -163,56 +188,95 @@ impl<'a> Parser<'a> {
                 ));
             }
         };
-        Ok(LocalMember::Field(Field { path, value, loc }))
+        Ok(LocalMember::Field(Field {
+            path: path.path,
+            path_span: path.span,
+            value,
+            loc,
+            span: Span::new(member_start, self.pos),
+        }))
     }
 
     fn parse_value(&mut self) -> Result<AstValue> {
         self.skip_inline_ws();
+        let start = self.pos;
         match self.peek() {
             Some(b'{') => {
                 self.bump();
                 let body = self.parse_object_body(Some(b'}'))?;
                 self.expect(b'}')?;
-                Ok(AstValue::Object(body))
+                Ok(AstValue::Object {
+                    body,
+                    span: Span::new(start, self.pos),
+                })
             }
             Some(b'[') => self.parse_array(),
-            Some(b'"') => Ok(AstValue::String(self.parse_string_value(true)?)),
+            Some(b'"') => Ok(AstValue::String {
+                value: self.parse_string_value(true)?,
+                span: Span::new(start, self.pos),
+            }),
             Some(b'$') if self.peek_n(1) == Some(b'{') => {
-                Ok(AstValue::Substitution(self.parse_substitution()?))
+                let path = self.parse_substitution()?;
+                Ok(AstValue::Substitution {
+                    path: path.path,
+                    path_span: path.span,
+                    span: Span::new(start, self.pos),
+                })
             }
-            Some(b'-' | b'0'..=b'9') => Ok(AstValue::Number(self.parse_number()?)),
+            Some(b'-' | b'0'..=b'9') => Ok(AstValue::Number {
+                value: self.parse_number()?,
+                span: Span::new(start, self.pos),
+            }),
             Some(b't') if self.starts_with_keyword(b"true") => {
                 self.consume(b"true");
-                Ok(AstValue::Bool(true))
+                Ok(AstValue::Bool {
+                    value: true,
+                    span: Span::new(start, self.pos),
+                })
             }
             Some(b'f') if self.starts_with_keyword(b"false") => {
                 self.consume(b"false");
-                Ok(AstValue::Bool(false))
+                Ok(AstValue::Bool {
+                    value: false,
+                    span: Span::new(start, self.pos),
+                })
             }
             Some(b'n') if self.starts_with_keyword(b"null") => {
                 self.consume(b"null");
-                Ok(AstValue::Null)
+                Ok(AstValue::Null {
+                    span: Span::new(start, self.pos),
+                })
             }
             Some(_) | None => Err(self.err(ErrorCode::UnexpectedToken, "expected value")),
         }
     }
 
     fn parse_array(&mut self) -> Result<AstValue> {
+        let start = self.pos;
         self.expect(b'[')?;
         let mut items = Vec::new();
         self.skip_ws_comments()?;
         if self.peek() == Some(b']') {
             self.bump();
-            return Ok(AstValue::Array(items));
+            return Ok(AstValue::Array {
+                items,
+                span: Span::new(start, self.pos),
+            });
         }
         loop {
             self.skip_ws_comments()?;
             if self.peek() == Some(b'.') && self.starts_with(b"...") {
+                let item_start = self.pos;
                 let loc = self.loc();
                 self.consume(b"...");
                 self.skip_inline_ws();
                 let path = self.parse_substitution()?;
-                items.push(ArrayItem::Spread { path, loc });
+                items.push(ArrayItem::Spread {
+                    path: path.path,
+                    path_span: path.span,
+                    loc,
+                    span: Span::new(item_start, self.pos),
+                });
             } else {
                 items.push(ArrayItem::Value(self.parse_value()?));
             }
@@ -243,17 +307,24 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(AstValue::Array(items))
+        Ok(AstValue::Array {
+            items,
+            span: Span::new(start, self.pos),
+        })
     }
 
-    fn parse_path(&mut self) -> Result<SconPath> {
+    fn parse_path(&mut self) -> Result<ParsedPath> {
+        let start = self.pos;
         let mut path = SconPath::new();
         path.push(self.parse_path_segment()?);
         while self.peek() == Some(b'.') {
             self.bump();
             path.push(self.parse_path_segment()?);
         }
-        Ok(path)
+        Ok(ParsedPath {
+            path,
+            span: Span::new(start, self.pos),
+        })
     }
 
     fn parse_path_segment(&mut self) -> Result<String> {
@@ -269,12 +340,16 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_substitution(&mut self) -> Result<SconPath> {
+    fn parse_substitution(&mut self) -> Result<ParsedPath> {
         self.expect(b'$')?;
         self.expect(b'{')?;
+        let path_start = self.pos;
         let path = self.parse_path()?;
         self.expect(b'}')?;
-        Ok(path)
+        Ok(ParsedPath {
+            path: path.path,
+            span: Span::new(path_start, self.pos - 1),
+        })
     }
 
     fn parse_string_no_interpolation(&mut self) -> Result<String> {
@@ -285,7 +360,7 @@ impl<'a> Parser<'a> {
                 for part in parts {
                     match part {
                         StringPart::Literal(text) => out.push_str(&text),
-                        StringPart::Interpolation(_) => {
+                        StringPart::Interpolation { .. } => {
                             return Err(self.err(
                                 ErrorCode::UnexpectedToken,
                                 "interpolation is not allowed here",
@@ -352,11 +427,17 @@ impl<'a> Parser<'a> {
                         parts.push(StringPart::Literal(std::mem::take(&mut literal)));
                     }
                     had_interpolation = true;
+                    let interpolation_start = self.pos;
                     self.bump();
                     self.bump();
+                    let path_start = self.pos;
                     let path = self.parse_path()?;
                     self.expect(b'}')?;
-                    parts.push(StringPart::Interpolation(path));
+                    parts.push(StringPart::Interpolation {
+                        path: path.path,
+                        path_span: Span::new(path_start, self.pos - 1),
+                        span: Span::new(interpolation_start, self.pos),
+                    });
                     segment_start = self.pos;
                 }
                 Some(b'\n') => {
@@ -640,6 +721,7 @@ impl<'a> Parser<'a> {
             file: self.file.clone(),
             line: self.line,
             column: self.column,
+            span: Span::new(self.pos, self.pos),
         }
     }
 

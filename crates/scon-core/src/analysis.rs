@@ -1,8 +1,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::ast::{AstValue, LocalMember, ObjectBody};
 use crate::error::{Error, ErrorCode, Result};
 use crate::limits::LoadOptions;
+use crate::source::{self, LineIndex, Token};
+pub use crate::source::{Comment, CommentKind, SourcePosition, SourceRange, Utf16Position};
 use crate::value::Value;
 
 #[derive(Clone, Debug, Default)]
@@ -22,32 +25,6 @@ impl Default for FormatOptions {
 }
 
 #[derive(Clone, Debug)]
-pub struct SourcePosition {
-    pub line: usize,
-    pub character: usize,
-    pub byte: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct SourceRange {
-    pub start: SourcePosition,
-    pub end: SourcePosition,
-}
-
-#[derive(Clone, Debug)]
-pub enum CommentKind {
-    Hash,
-    SlashSlash,
-}
-
-#[derive(Clone, Debug)]
-pub struct Comment {
-    pub kind: CommentKind,
-    pub text: String,
-    pub range: SourceRange,
-}
-
-#[derive(Clone, Debug)]
 pub struct Symbol {
     pub path: Vec<String>,
     pub range: SourceRange,
@@ -64,6 +41,8 @@ pub struct Diagnostic {
 #[derive(Clone, Debug)]
 pub struct ParsedDocument {
     pub file: Option<PathBuf>,
+    pub line_index: LineIndex,
+    pub tokens: Vec<Token>,
     pub comments: Vec<Comment>,
     pub symbols: Vec<Symbol>,
 }
@@ -77,11 +56,17 @@ pub struct Analysis {
 }
 
 pub fn parse_source(source: &str, options: ParseOptions) -> Result<ParsedDocument> {
-    crate::parser::parse_str(source, options.file.clone())?;
+    let document = crate::parser::parse_str(source, options.file.clone())?;
+    let line_index = LineIndex::new(source);
+    let tokens = source::collect_tokens(source);
+    let comments = source::comments_from_tokens(source, &line_index, &tokens);
+    let symbols = collect_symbols(&document.body, source, &line_index, &[]);
     Ok(ParsedDocument {
         file: options.file,
-        comments: collect_comments(source),
-        symbols: collect_symbols(source),
+        line_index,
+        tokens,
+        comments,
+        symbols,
     })
 }
 
@@ -95,8 +80,12 @@ pub fn analyze_source(source: &str, options: ParseOptions) -> Analysis {
         },
         Err(err) => Analysis {
             diagnostics: vec![diagnostic_from_error(&err, source)],
-            comments: collect_comments(source),
-            symbols: collect_symbols(source),
+            comments: {
+                let line_index = LineIndex::new(source);
+                let tokens = source::collect_tokens(source);
+                source::comments_from_tokens(source, &line_index, &tokens)
+            },
+            symbols: Vec::new(),
             value: None,
         },
     }
@@ -105,8 +94,23 @@ pub fn analyze_source(source: &str, options: ParseOptions) -> Analysis {
 pub fn analyze_file(path: impl AsRef<Path>, options: LoadOptions) -> Analysis {
     let path = path.as_ref();
     let source = fs::read_to_string(path).unwrap_or_default();
-    let comments = collect_comments(&source);
-    let symbols = collect_symbols(&source);
+    let parsed = parse_source(
+        &source,
+        ParseOptions {
+            file: Some(path.to_path_buf()),
+        },
+    );
+    let (comments, symbols) = match parsed {
+        Ok(parsed) => (parsed.comments, parsed.symbols),
+        Err(_) => {
+            let line_index = LineIndex::new(&source);
+            let tokens = source::collect_tokens(&source);
+            (
+                source::comments_from_tokens(&source, &line_index, &tokens),
+                Vec::new(),
+            )
+        }
+    };
     match crate::parse_file_with_options(path, options) {
         Ok(value) => Analysis {
             diagnostics: Vec::new(),
@@ -159,10 +163,18 @@ pub fn get_path<'a>(value: &'a Value, path: &str) -> Result<&'a Value> {
 }
 
 pub fn diagnostic_from_error(error: &Error, source: &str) -> Diagnostic {
+    let line_index = LineIndex::new(source);
+    let byte = line_index
+        .byte_for_line_character(
+            source,
+            error.line.saturating_sub(1),
+            error.column.saturating_sub(1),
+        )
+        .unwrap_or(0);
     let start = SourcePosition {
         line: error.line.saturating_sub(1),
         character: error.column.saturating_sub(1),
-        byte: line_column_to_byte(source, error.line, error.column).unwrap_or(0),
+        byte,
     };
     let end = SourcePosition {
         line: start.line,
@@ -264,90 +276,26 @@ fn find_unquoted(line: &str, target: u8) -> Option<usize> {
     None
 }
 
-fn collect_comments(source: &str) -> Vec<Comment> {
-    let mut comments = Vec::new();
-    let mut byte_offset = 0usize;
-    for (line_index, line) in source.lines().enumerate() {
-        if let Some((column, kind)) = find_comment_start(line) {
-            let text = line[column..].to_string();
-            let len = text.len();
-            comments.push(Comment {
-                kind,
-                text,
-                range: SourceRange {
-                    start: SourcePosition {
-                        line: line_index,
-                        character: column,
-                        byte: byte_offset + column,
-                    },
-                    end: SourcePosition {
-                        line: line_index,
-                        character: column + len,
-                        byte: byte_offset + column + len,
-                    },
-                },
-            });
-        }
-        byte_offset += line.len() + 1;
-    }
-    comments
-}
-
-fn find_comment_start(line: &str) -> Option<(usize, CommentKind)> {
-    let mut in_string = false;
-    let mut escaped = false;
-    let bytes = line.as_bytes();
-    for (index, byte) in bytes.iter().copied().enumerate() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        match byte {
-            b'\\' if in_string => escaped = true,
-            b'"' => in_string = !in_string,
-            b'#' if !in_string => return Some((index, CommentKind::Hash)),
-            b'/' if !in_string && bytes.get(index + 1) == Some(&b'/') => {
-                return Some((index, CommentKind::SlashSlash));
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-fn collect_symbols(source: &str) -> Vec<Symbol> {
+fn collect_symbols(
+    body: &ObjectBody,
+    source: &str,
+    line_index: &LineIndex,
+    parent_path: &[String],
+) -> Vec<Symbol> {
     let mut symbols = Vec::new();
-    let mut byte_offset = 0usize;
-    for (line_index, line) in source.lines().enumerate() {
-        let trimmed = strip_inline_comment(line).trim_start();
-        let leading = line.len() - line.trim_start().len();
-        if trimmed.is_empty() || trimmed.starts_with("include") || trimmed.starts_with("...") {
-            byte_offset += line.len() + 1;
+    for member in &body.members {
+        let LocalMember::Field(field) = member else {
             continue;
+        };
+        let mut path = parent_path.to_vec();
+        path.extend(field.path.iter().cloned());
+        symbols.push(Symbol {
+            path: path.clone(),
+            range: line_index.source_range(source, field.path_span),
+        });
+        if let AstValue::Object { body, .. } = &field.value {
+            symbols.extend(collect_symbols(body, source, line_index, &path));
         }
-        let end = trimmed
-            .find(|ch: char| ch == '=' || ch == '{' || ch.is_whitespace())
-            .unwrap_or(trimmed.len());
-        let key = &trimmed[..end];
-        if !key.is_empty() {
-            let path = key.split('.').map(str::to_string).collect::<Vec<_>>();
-            symbols.push(Symbol {
-                path,
-                range: SourceRange {
-                    start: SourcePosition {
-                        line: line_index,
-                        character: leading,
-                        byte: byte_offset + leading,
-                    },
-                    end: SourcePosition {
-                        line: line_index,
-                        character: leading + key.len(),
-                        byte: byte_offset + leading + key.len(),
-                    },
-                },
-            });
-        }
-        byte_offset += line.len() + 1;
     }
     symbols
 }
@@ -388,23 +336,6 @@ fn parse_path_query(path: &str) -> Result<Vec<String>> {
         return Err(Error::new(ErrorCode::UnexpectedToken, "empty path"));
     }
     Ok(parts)
-}
-
-fn line_column_to_byte(source: &str, line: usize, column: usize) -> Option<usize> {
-    let mut current_line = 1usize;
-    let mut current_column = 1usize;
-    for (index, ch) in source.char_indices() {
-        if current_line == line && current_column == column {
-            return Some(index);
-        }
-        if ch == '\n' {
-            current_line += 1;
-            current_column = 1;
-        } else {
-            current_column += 1;
-        }
-    }
-    Some(source.len())
 }
 
 fn write_spaces(out: &mut String, count: usize) {
