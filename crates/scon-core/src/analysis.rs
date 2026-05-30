@@ -982,8 +982,17 @@ impl IncludeLoader for AnalysisLoader<'_> {
         path: &str,
         loc: crate::ast::Location,
     ) -> Result<Document> {
-        let resolved = self.resolve_include(including_file, path, loc)?;
+        let resolved = self.resolve_include(including_file, path, loc.clone())?;
         self.load_canonical(resolved)
+            .map_err(|err| attach_include_location(err, loc))
+    }
+}
+
+fn attach_include_location(err: Error, loc: crate::ast::Location) -> Error {
+    if err.span.is_none() && err.file.is_none() {
+        err.at(loc)
+    } else {
+        err
     }
 }
 

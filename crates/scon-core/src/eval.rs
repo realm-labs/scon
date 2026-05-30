@@ -151,7 +151,7 @@ impl Evaluator {
                 Ok(())
             }
             value => {
-                let evaluated = self.eval_value(value)?;
+                let evaluated = self.eval_value(value, file)?;
                 if current_path.is_empty() {
                     insert_local_value_owned(
                         &mut self.root,
@@ -173,7 +173,7 @@ impl Evaluator {
         }
     }
 
-    fn eval_value(&mut self, value: AstValue) -> Result<EvalValue> {
+    fn eval_value(&mut self, value: AstValue, file: Option<&std::path::Path>) -> Result<EvalValue> {
         match value {
             AstValue::Object { body, .. } => {
                 let mut nested = Evaluator {
@@ -181,14 +181,14 @@ impl Evaluator {
                     in_progress: vec![Vec::new()],
                 };
                 // Anonymous object values cannot contain includes because there is no file context here.
-                nested.eval_contents(body, &[], None, &mut crate::loader::NoopLoader)?;
+                nested.eval_contents(body, &[], file, &mut crate::loader::NoopLoader)?;
                 Ok(EvalValue::Object(nested.root))
             }
             AstValue::Array { items, .. } => {
                 let mut out = Vec::with_capacity(items.len());
                 for item in items {
                     match item {
-                        ArrayItem::Value(value) => out.push(self.eval_value(value)?),
+                        ArrayItem::Value(value) => out.push(self.eval_value(value, file)?),
                         ArrayItem::Spread { path, loc, .. } => {
                             let target = self.lookup_completed_entry(path.as_slice(), &loc)?;
                             let EvalValue::Array(values) = &target.value else {
@@ -213,15 +213,12 @@ impl Evaluator {
                     for part in parts {
                         match part {
                             StringPart::Literal(text) => out.push_str(&text),
-                            StringPart::Interpolation { path, .. } => {
+                            StringPart::Interpolation {
+                                path, path_span, ..
+                            } => {
                                 let value = self.lookup_completed_entry(
                                     path.as_slice(),
-                                    &Location {
-                                        file: None,
-                                        line: 1,
-                                        column: 1,
-                                        span: Span::default(),
-                                    },
+                                    &location_for_span(file, &path_span),
                                 )?;
                                 match &value.value {
                                     EvalValue::String(text) => out.push_str(text),
@@ -246,15 +243,9 @@ impl Evaluator {
             AstValue::Number { value: text, .. } => Ok(EvalValue::Number(text)),
             AstValue::Bool { value, .. } => Ok(EvalValue::Bool(value)),
             AstValue::Null { .. } => Ok(EvalValue::Null),
-            AstValue::Substitution { path, .. } => self.lookup_completed(
-                path.as_slice(),
-                &Location {
-                    file: None,
-                    line: 1,
-                    column: 1,
-                    span: Span::default(),
-                },
-            ),
+            AstValue::Substitution {
+                path, path_span, ..
+            } => self.lookup_completed(path.as_slice(), &location_for_span(file, &path_span)),
         }
     }
 
@@ -280,6 +271,15 @@ impl Evaluator {
             .at(loc.clone())
             .with_path(path)
         })
+    }
+}
+
+fn location_for_span(file: Option<&std::path::Path>, span: &Span) -> Location {
+    Location {
+        file: file.map(std::path::Path::to_path_buf),
+        line: 1,
+        column: 1,
+        span: *span,
     }
 }
 

@@ -464,6 +464,16 @@ server {
     }
 
     #[test]
+    fn analyze_source_reports_reference_diagnostic_at_reference_span() {
+        let analysis = analyze_source("a = ${missing}\n", ParseOptions::default());
+        let diagnostic = analysis.diagnostics.first().unwrap();
+        assert_eq!(diagnostic.code, ErrorCode::MissingReference);
+        let range = diagnostic.range.as_ref().unwrap();
+        assert_eq!(range.start.character, 6);
+        assert_eq!(range.end.character, 13);
+    }
+
+    #[test]
     fn to_string_requires_object_root() {
         let err = format::to_string(&Value::Array(vec![])).unwrap_err();
         assert_eq!(err.code, ErrorCode::InvalidRootType);

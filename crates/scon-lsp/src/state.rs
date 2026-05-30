@@ -145,3 +145,69 @@ impl WorkspaceState {
 fn path_to_uri(path: &Path) -> Option<Url> {
     Url::from_file_path(PathBuf::from(path)).ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn open_documents_override_filesystem_for_include_analysis() {
+        let root = unique_root();
+        let app = root.join("app.scon");
+        let base = root.join("base.scon");
+        let app_uri = Url::from_file_path(&app).unwrap();
+        let base_uri = Url::from_file_path(&base).unwrap();
+        let mut state = WorkspaceState::default();
+
+        state.open_document(
+            app_uri.clone(),
+            r#"
+defaults {
+  host = "0.0.0.0"
+}
+include "./base.scon"
+"#
+            .to_string(),
+        );
+        state.open_document(
+            base_uri.clone(),
+            r#"
+server {
+  host = ${defaults.host}
+}
+"#
+            .to_string(),
+        );
+
+        let analysis = state.refresh_analysis(&app_uri).unwrap();
+        assert!(analysis.diagnostics.is_empty());
+        assert!(state.dependent_uris(&base_uri).contains(&app_uri));
+
+        state.change_document(
+            base_uri.clone(),
+            r#"
+server {
+  host = ${missing.host}
+}
+"#
+            .to_string(),
+        );
+        let analysis = state.refresh_analysis(&app_uri).unwrap();
+        assert!(
+            analysis
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == scon::ErrorCode::MissingReference)
+        );
+    }
+
+    fn unique_root() -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "scon-lsp-state-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+}
