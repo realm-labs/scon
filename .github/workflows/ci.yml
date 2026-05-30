@@ -44,7 +44,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo install cargo-fuzz --locked
+      # cargo-fuzz 0.13.1's published lockfile pins rustix 0.36.x, which no
+      # longer compiles on current nightly due reserved rustc_* attributes.
+      - run: cargo install cargo-fuzz
       - name: Run fuzz smoke
         run: |
           if [ -n "${FUZZ_SECONDS}" ]; then
