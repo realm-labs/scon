@@ -24,7 +24,7 @@ Update this document after each milestone is complete. Commit the update togethe
 | Milestone | Status | Commit | Notes |
 | --- | --- | --- | --- |
 | M1: Core Source Model | Complete | 90ede09 | Span-aware AST, line index, token/comment collection, parser-backed symbols. |
-| M2: Production Analysis API | Complete | pending | Structured diagnostics, definitions, references, include references, and source-store analysis. |
+| M2: Production Analysis API | Complete | 6c2e5fc | Structured diagnostics, definitions, references, include references, and source-store analysis. |
 | M3: AST/Trivia Source Formatter | Not started |  |  |
 | M4: LSP Architecture Refactor | Not started |  |  |
 | M5: Production Diagnostics And Formatting | Not started |  |  |
@@ -47,7 +47,7 @@ Update this document after each milestone is complete. Commit the update togethe
 - Status: Complete
 - Summary: Replaced the first-pass analysis surface with `AnalyzedDocument`, structured diagnostics, definitions, references, include references, source-store-backed file analysis, and span-backed diagnostic ranges.
 - Checks: `cargo fmt --check`; `cargo test --workspace --exclude scon-fuzz`; `cargo clippy --workspace --exclude scon-fuzz --all-targets -- -D warnings`
-- Commit: pending
+- Commit: 6c2e5fc
 - Follow-up: M3 should replace the remaining line-based formatter with an AST/trivia formatter while keeping resolved canonical formatting separate.
 
 ### M3: AST/Trivia Source Formatter
