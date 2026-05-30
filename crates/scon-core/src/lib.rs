@@ -16,9 +16,12 @@ mod value;
 use std::path::Path;
 
 pub use analysis::{
-    Analysis, Comment, CommentKind, Diagnostic, FormatOptions, ParseOptions, ParsedDocument,
-    SourcePosition, SourceRange, Symbol, Utf16Position, analyze_file, analyze_source,
-    diagnostic_from_error, format_source, get_path, parse_source, resolve_file, resolve_source,
+    AnalyzedDocument, Comment, CommentKind, Definition, DefinitionKind, Diagnostic,
+    DiagnosticRelatedInformation, DiagnosticSeverity, FileSourceStore, FormatOptions,
+    IncludeReference, ParseOptions, ParsedDocument, Reference, ReferenceKind, SourcePosition,
+    SourceRange, SourceStore, Symbol, Utf16Position, analyze_file, analyze_file_with_store,
+    analyze_source, diagnostic_from_error, format_source, get_path, parse_source, resolve_file,
+    resolve_source,
 };
 pub use error::{Error, ErrorCode, Result};
 pub use limits::{Limits, LoadOptions};
@@ -103,7 +106,9 @@ mod tests {
     use super::*;
     use indexmap::IndexMap;
     use serde::{Deserialize, Serialize};
+    use std::collections::HashMap;
     use std::fs;
+    use std::path::{Path, PathBuf};
 
     #[derive(Debug, Deserialize, PartialEq, Serialize)]
     struct Server {
@@ -305,6 +310,100 @@ server {
                 .iter()
                 .any(|symbol| symbol.path == vec!["server", "host"])
         );
+    }
+
+    #[test]
+    fn analyze_source_exposes_definitions_references_and_targets() {
+        let analysis = analyze_source(
+            r#"
+defaults {
+  host = "127.0.0.1"
+}
+base_paths = ["/bin"]
+server {
+  ...${defaults}
+  paths = [...${base_paths}]
+  host_copy = ${defaults.host}
+  url = "http://${defaults.host}"
+}
+"#,
+            ParseOptions::default(),
+        );
+
+        assert!(analysis.diagnostics.is_empty());
+        assert!(analysis.value.is_some());
+        assert!(
+            analysis
+                .definitions
+                .iter()
+                .any(|definition| definition.path == vec!["defaults", "host"])
+        );
+        assert!(analysis.references.iter().any(|reference| {
+            reference.kind == ReferenceKind::ObjectSpread
+                && reference.path == vec!["defaults"]
+                && reference.target.is_some()
+        }));
+        assert!(analysis.references.iter().any(|reference| {
+            reference.kind == ReferenceKind::ArraySpread
+                && reference.path == vec!["base_paths"]
+                && reference.target.is_some()
+        }));
+        assert!(analysis.references.iter().any(|reference| {
+            reference.kind == ReferenceKind::Interpolation
+                && reference.path == vec!["defaults", "host"]
+                && reference.target.is_some()
+        }));
+    }
+
+    #[test]
+    fn analyze_file_can_use_source_store_for_unsaved_includes() {
+        struct MemoryStore {
+            sources: HashMap<PathBuf, String>,
+        }
+
+        impl SourceStore for MemoryStore {
+            fn read_source(&self, path: &Path) -> std::io::Result<Option<String>> {
+                Ok(self.sources.get(path).cloned())
+            }
+        }
+
+        let root = std::env::temp_dir().join(format!(
+            "scon-analysis-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let app = root.join("app.scon");
+        let base = root.join("base.scon");
+        let mut sources = HashMap::new();
+        sources.insert(
+            app.clone(),
+            r#"
+defaults {
+  host = "0.0.0.0"
+}
+include "./base.scon"
+"#
+            .to_string(),
+        );
+        sources.insert(
+            base.clone(),
+            r#"
+server {
+  host = ${defaults.host}
+}
+"#
+            .to_string(),
+        );
+
+        let store = MemoryStore { sources };
+        let analysis = analyze_file_with_store(&app, LoadOptions::default(), &store);
+
+        assert!(analysis.diagnostics.is_empty());
+        assert!(analysis.value.is_some());
+        assert_eq!(analysis.includes.len(), 1);
+        assert_eq!(analysis.includes[0].resolved_path, Some(base));
     }
 
     #[test]

@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use crate::ast::Span;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -35,6 +37,7 @@ pub struct Error {
     pub file: Option<PathBuf>,
     pub line: usize,
     pub column: usize,
+    pub span: Option<Span>,
     pub path: Option<Vec<String>>,
     pub include_stack: Vec<PathBuf>,
     pub hint: Option<String>,
@@ -48,6 +51,7 @@ impl Error {
             file: None,
             line: 1,
             column: 1,
+            span: None,
             path: None,
             include_stack: Vec::new(),
             hint: None,
@@ -58,6 +62,7 @@ impl Error {
         self.file = loc.file;
         self.line = loc.line;
         self.column = loc.column;
+        self.span = Some(loc.span);
         self
     }
 
