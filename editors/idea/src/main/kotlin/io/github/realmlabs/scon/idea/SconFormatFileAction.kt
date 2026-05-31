@@ -6,7 +6,6 @@ import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import io.github.realmlabs.scon.SconException
-import io.github.realmlabs.scon.SconParseOptions
 import io.github.realmlabs.scon.formatSource
 
 class SconFormatFileAction : AnAction() {
@@ -19,13 +18,7 @@ class SconFormatFileAction : AnAction() {
         val file = event.getData(CommonDataKeys.PSI_FILE) as? SconFile ?: return
         val document = FileDocumentManager.getInstance().getDocument(file.virtualFile ?: return) ?: return
         val formatted = try {
-            formatSource(
-                document.text,
-                SconParseOptions(
-                    sourceName = file.virtualFile.path,
-                    sourcePath = file.sconSourcePath(),
-                ),
-            )
+            formatSource(document.text)
         } catch (_: SconException) {
             return
         }

@@ -3,6 +3,15 @@ package io.github.realmlabs.scon
 import java.nio.file.Files
 import java.nio.file.Path
 
+public interface SconSourceStore {
+    public fun readSource(path: Path): String?
+}
+
+public object FileSconSourceStore : SconSourceStore {
+    override fun readSource(path: Path): String? =
+        if (Files.exists(path)) Files.readString(path) else null
+}
+
 public data class SconParseOptions(
     val sourceName: String = "<source>",
     val preserveTrivia: Boolean = true,
@@ -11,7 +20,20 @@ public data class SconParseOptions(
 
 public data class SconResolveOptions(
     val includeRoot: Path? = null,
-    val maxFileSize: Int? = 1024 * 1024,
+    val limits: SconLimits = SconLimits(),
+    val sourceStore: SconSourceStore = FileSconSourceStore,
+)
+
+public data class SconLimits(
+    val maxFileSize: Int = 16 * 1024 * 1024,
+    val maxIncludeDepth: Int = 64,
+    val maxIncludeFiles: Int = 1024,
+    val maxArrayLength: Int = 1_000_000,
+    val maxObjectDepth: Int = 512,
+)
+
+public data class SconFormatOptions(
+    val indent: Int = 2,
 )
 
 public fun parseSource(
@@ -47,7 +69,15 @@ public fun resolveFile(
     path: Path,
     options: SconResolveOptions = SconResolveOptions(),
 ): SconValue {
-    if (options.maxFileSize != null && Files.size(path) > options.maxFileSize) {
+    val source = options.sourceStore.readSource(path)
+        ?: throw SconException(
+            SconError(
+                code = SconErrorCode.IncludeNotFound,
+                message = "SCON file not found: $path",
+                span = null,
+            ),
+        )
+    if (source.length > options.limits.maxFileSize) {
         throw SconException(
             SconError(
                 code = SconErrorCode.ResourceLimitExceeded,
@@ -56,7 +86,6 @@ public fun resolveFile(
             ),
         )
     }
-    val source = Files.readString(path)
     val includeRoot = options.includeRoot ?: path.toAbsolutePath().parent
     val document = parseSource(
         source,
@@ -73,8 +102,8 @@ public fun parseValueFile(
 
 public fun formatSource(
     source: String,
-    options: SconParseOptions = SconParseOptions(),
+    options: SconFormatOptions = SconFormatOptions(),
 ): String {
-    parseSource(source, options)
-    return if (source.endsWith("\n")) source.replace("\r\n", "\n") else source.replace("\r\n", "\n") + "\n"
+    val document = parseSource(source)
+    return SourceFormatter(source, options).format(document)
 }

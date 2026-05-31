@@ -106,13 +106,3 @@ private fun formatKey(key: String): String =
     } else {
         buildString { appendSconString(key) }
     }
-
-private fun String.isSconIdentifier(): Boolean {
-    if (isEmpty()) return false
-    val first = first()
-    if (!first.isAsciiLetter() && first != '_') return false
-    return drop(1).all { it.isAsciiLetter() || it.isDigit() || it == '_' || it == '-' }
-}
-
-private fun Char.isAsciiLetter(): Boolean =
-    this in 'a'..'z' || this in 'A'..'Z'

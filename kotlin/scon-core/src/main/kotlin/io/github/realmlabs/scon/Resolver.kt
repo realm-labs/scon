@@ -1,6 +1,5 @@
 package io.github.realmlabs.scon
 
-import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.isRegularFile
 
@@ -8,11 +7,16 @@ internal class Resolver(
     private val options: SconResolveOptions,
 ) {
     private val includeStack = mutableListOf<Path>()
+    private val includeSeen = mutableSetOf<Path>()
     private val documentCache = mutableMapOf<Path, ParsedDocument>()
 
     fun resolve(document: ParsedDocument): SconValue.ObjectValue {
-        val evaluator = Evaluator(options, includeStack, documentCache)
-        document.sourcePath?.let { includeStack.add(it.toAbsolutePath().normalize()) }
+        val evaluator = Evaluator(options, includeStack, includeSeen, documentCache)
+        document.sourcePath?.let {
+            val canonical = it.toAbsolutePath().normalize()
+            includeStack.add(canonical)
+            includeSeen.add(canonical)
+        }
         try {
             return evaluator.evalDocument(document)
         } finally {
@@ -42,6 +46,7 @@ private sealed interface EvalValue {
 private class Evaluator(
     private val options: SconResolveOptions,
     private val includeStack: MutableList<Path>,
+    private val includeSeen: MutableSet<Path>,
     private val documentCache: MutableMap<Path, ParsedDocument>,
 ) {
     private val root = linkedMapOf<String, EvalEntry>()
@@ -53,6 +58,9 @@ private class Evaluator(
     }
 
     private fun evalObjectBody(obj: AstObject, path: List<String>, sourcePath: Path?) {
+        if (path.size > options.limits.maxObjectDepth) {
+            throw sconError(SconErrorCode.ResourceLimitExceeded, "maximum object depth exceeded", obj.span)
+        }
         var localSeen = false
         for (member in obj.members) {
             when (member) {
@@ -105,6 +113,9 @@ private class Evaluator(
             is AstArray -> {
                 val out = mutableListOf<EvalValue>()
                 for (item in value.items) {
+                    if (out.size >= options.limits.maxArrayLength) {
+                        throw sconError(SconErrorCode.ResourceLimitExceeded, "maximum array length exceeded", item.span)
+                    }
                     when (item) {
                         is AstArrayValueItem -> out += evalValue(item.value, sourcePath)
                         is AstArraySpread -> {
@@ -118,7 +129,7 @@ private class Evaluator(
                 EvalValue.ArrayValue(out)
             }
             is AstObjectValue -> {
-                val nested = Evaluator(options, includeStack, documentCache)
+                val nested = Evaluator(options, includeStack, includeSeen, documentCache)
                 nested.evalObjectBody(value.value, emptyList(), sourcePath)
                 EvalValue.ObjectValue(nested.root)
             }
@@ -291,30 +302,32 @@ private class Evaluator(
             ?: throw sconError(SconErrorCode.InvalidIncludePath, "includes require a file context", include.span)
         val base = includingFile?.toAbsolutePath()?.normalize()?.parent ?: includeRoot
         val candidate = base.resolve(includePath).normalize()
-        val canonical = try {
-            candidate.toRealPath()
-        } catch (err: Exception) {
-            throw sconError(SconErrorCode.IncludeNotFound, "include file not found: ${err.message}", include.span)
-        }
-        if (!canonical.startsWith(includeRoot.toRealPath())) {
+        val canonical = candidate.toAbsolutePath().normalize()
+        if (!canonical.startsWith(includeRoot.toAbsolutePath().normalize())) {
             throw sconError(SconErrorCode.IncludePathDenied, "include path escapes include root", include.span)
         }
-        if (!canonical.isRegularFile()) {
+        val source = options.sourceStore.readSource(canonical)
+            ?: throw sconError(SconErrorCode.IncludeNotFound, "include file not found: $canonical", include.span)
+        if (options.sourceStore == FileSconSourceStore && !canonical.isRegularFile()) {
             throw sconError(SconErrorCode.IncludeNotFile, "include path is not a file", include.span)
         }
         if (canonical in includeStack) {
             throw sconError(SconErrorCode.IncludeCycle, "include cycle: $canonical", include.span)
         }
-        options.maxFileSize?.let { max ->
-            if (Files.size(canonical) > max) {
-                throw sconError(SconErrorCode.ResourceLimitExceeded, "maximum file size exceeded", include.span)
-            }
+        if (includeStack.size >= options.limits.maxIncludeDepth) {
+            throw sconError(SconErrorCode.ResourceLimitExceeded, "maximum include depth exceeded", include.span)
+        }
+        includeSeen.add(canonical)
+        if (includeSeen.size > options.limits.maxIncludeFiles) {
+            throw sconError(SconErrorCode.ResourceLimitExceeded, "maximum include file count exceeded", include.span)
+        }
+        if (source.length > options.limits.maxFileSize) {
+            throw sconError(SconErrorCode.ResourceLimitExceeded, "maximum file size exceeded", include.span)
         }
         val cached = documentCache[canonical]
         if (cached != null) return cached
         includeStack.add(canonical)
         try {
-            val source = Files.readString(canonical)
             val parsed = try {
                 parseSource(source, SconParseOptions(sourceName = canonical.toString(), sourcePath = canonical))
             } catch (err: SconException) {
