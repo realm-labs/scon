@@ -18,6 +18,18 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 10
 
+  - package-ecosystem: "gomod"
+    directory: "/go"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: "npm"
+    directory: "/typescript"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
   - package-ecosystem: "npm"
     directory: "/editors/vscode"
     schedule:

@@ -1,0 +1,15 @@
+{
+  "name": "@realmlabs/scon-typescript",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.base.json",
+    "test": "pnpm build && node --test \"packages/*/test/*.test.js\"",
+    "typecheck": "tsc -p tsconfig.base.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.9.0",
+    "zod": "^4.1.0"
+  }
+}
