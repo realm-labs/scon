@@ -10,6 +10,8 @@ multiple language/tooling implementations in one repository.
   serialization adapters.
 - `go/`: Go SCON core implementation and reflection-based typed adapter.
 - `typescript/`: TypeScript SCON core implementation and Zod adapter.
+- `python/`: Python SCON core implementation and dataclass typed adapter.
+- `java/`: Java SCON core implementation, reflection mapper, and Jackson adapter.
 - `editors/`: editor integrations and Tree-sitter grammar.
 - `tests/conformance/`: language-neutral parse and resolve fixture suite.
 - `docs/`: specifications, release notes, and tooling documentation.
@@ -41,4 +43,14 @@ cd typescript
 pnpm install --frozen-lockfile
 pnpm test
 pnpm typecheck
+```
+
+```sh
+cd python
+python -m pytest
+```
+
+```sh
+cd java
+mvn test
 ```

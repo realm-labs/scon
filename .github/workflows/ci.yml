@@ -80,6 +80,29 @@ jobs:
       - run: pnpm typecheck
         working-directory: typescript
 
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e ".[test]"
+        working-directory: python
+      - run: python -m pytest
+        working-directory: python
+
+  java:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: mvn test
+        working-directory: java
+
   idea-plugin:
     runs-on: ubuntu-latest
     steps:
