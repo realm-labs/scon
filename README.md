@@ -12,6 +12,8 @@ multiple language/tooling implementations in one repository.
 - `typescript/`: TypeScript SCON core implementation and Zod adapter.
 - `python/`: Python SCON core implementation and dataclass typed adapter.
 - `java/`: Java SCON core implementation, reflection mapper, and Jackson adapter.
+- `csharp/`: C# SCON core implementation, reflection mapper, and System.Text.Json adapter.
+- `swift/`: Swift SCON core implementation and Codable adapter.
 - `editors/`: editor integrations and Tree-sitter grammar.
 - `tests/conformance/`: language-neutral parse and resolve fixture suite.
 - `docs/`: specifications, release notes, and tooling documentation.
@@ -53,4 +55,14 @@ python -m pytest
 ```sh
 cd java
 mvn test
+```
+
+```sh
+cd csharp
+dotnet test
+```
+
+```sh
+cd swift
+swift test
 ```

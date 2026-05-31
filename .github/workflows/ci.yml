@@ -103,6 +103,23 @@ jobs:
       - run: mvn test
         working-directory: java
 
+  csharp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet test
+        working-directory: csharp
+
+  swift:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+        working-directory: swift
+
   idea-plugin:
     runs-on: ubuntu-latest
     steps:

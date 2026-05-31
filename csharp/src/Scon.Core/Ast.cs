@@ -1,0 +1,24 @@
+namespace RealmLabs.Scon;
+
+internal sealed record Document(AstObject Root, string? File);
+internal sealed record AstObject(List<AstMember> Members, Span Span);
+internal abstract record AstMember(Span Span);
+internal sealed record AstField(AstPath Path, AstValue Value, Span MemberSpan) : AstMember(MemberSpan);
+internal sealed record AstInclude(AstString Path, Span MemberSpan) : AstMember(MemberSpan);
+internal sealed record AstObjectSpread(AstSubstitution Sub, Span MemberSpan) : AstMember(MemberSpan);
+internal sealed record AstPath(List<AstPathSegment> Segments, Span Span);
+internal sealed record AstPathSegment(string Value, bool Quoted, Span Span);
+internal abstract record AstValue(Span Span);
+internal sealed record AstNull(Span ValueSpan) : AstValue(ValueSpan);
+internal sealed record AstBool(bool Value, Span ValueSpan) : AstValue(ValueSpan);
+internal sealed record AstNumber(string Raw, Span ValueSpan) : AstValue(ValueSpan);
+internal sealed record AstString(string Value, string Raw, List<StringPart> Parts, Span ValueSpan) : AstValue(ValueSpan);
+internal sealed record AstArray(List<AstArrayItem> Items, Span ValueSpan) : AstValue(ValueSpan);
+internal sealed record AstObjectValue(AstObject Object, Span ValueSpan) : AstValue(ValueSpan);
+internal sealed record AstSubstitution(AstPath Path, Span ValueSpan) : AstValue(ValueSpan);
+internal abstract record AstArrayItem(Span Span);
+internal sealed record AstArrayValue(AstValue Value, Span ItemSpan) : AstArrayItem(ItemSpan);
+internal sealed record AstArraySpread(AstSubstitution Sub, Span ItemSpan) : AstArrayItem(ItemSpan);
+internal abstract record StringPart;
+internal sealed record StringLiteral(string Value) : StringPart;
+internal sealed record StringInterpolation(AstPath Path, Span Span) : StringPart;

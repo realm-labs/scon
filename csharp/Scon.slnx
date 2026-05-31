@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Scon.Core/Scon.Core.csproj" />
+    <Project Path="src/Scon.SystemTextJson/Scon.SystemTextJson.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Scon.Tests/Scon.Tests.csproj" />
+  </Folder>
+</Solution>
