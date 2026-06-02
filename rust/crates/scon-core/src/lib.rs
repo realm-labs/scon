@@ -30,6 +30,245 @@ pub use value::{Number, Value};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[doc(hidden)]
+pub mod __private {
+    use indexmap::IndexMap;
+    use serde::Serialize;
+
+    use crate::Value;
+
+    pub fn new_object() -> IndexMap<String, Value> {
+        IndexMap::new()
+    }
+
+    pub fn insert_object(object: &mut IndexMap<String, Value>, key: String, value: Value) {
+        object.insert(key, value);
+    }
+
+    pub fn key_to_string<T>(key: &T) -> String
+    where
+        T: Serialize,
+    {
+        match to_value(key) {
+            Value::String(value) => value,
+            other => panic!(
+                "scon! object keys must serialize as strings, found {}",
+                type_name(&other)
+            ),
+        }
+    }
+
+    pub fn to_value<T>(value: &T) -> Value
+    where
+        T: Serialize,
+    {
+        crate::to_value(value).expect("scon! failed to serialize interpolated value")
+    }
+
+    fn type_name(value: &Value) -> &'static str {
+        match value {
+            Value::Null => "null",
+            Value::Bool(_) => "boolean",
+            Value::Number(_) => "number",
+            Value::String(_) => "string",
+            Value::Array(_) => "array",
+            Value::Object(_) => "object",
+        }
+    }
+}
+
+/// Construct a [`Value`] from a SCON-like literal.
+///
+/// ```
+/// # let port = 8080u64;
+/// let value = scon::scon!({
+///     name: "demo",
+///     "read.only": true,
+///     port: port,
+///     paths: ["/bin", "/usr/bin"],
+///     tls: null,
+/// });
+/// # assert!(matches!(value, scon::Value::Object(_)));
+/// ```
+///
+/// Identifier object keys are stringified, string literal keys are accepted
+/// directly, and parenthesized keys are serialized dynamically. Interpolated
+/// Rust expressions must implement [`serde::Serialize`]. Serialization failures
+/// panic, matching the behavior of `serde_json::json!`.
+#[macro_export]
+macro_rules! scon {
+    (@array [$($elems:expr,)*]) => {
+        vec![$($elems,)*]
+    };
+
+    (@array [$($elems:expr),*]) => {
+        vec![$($elems),*]
+    };
+
+    (@array [$($elems:expr,)*] null $($rest:tt)*) => {
+        $crate::scon!(@array [$($elems,)* $crate::scon!(@value null)] $($rest)*)
+    };
+
+    (@array [$($elems:expr,)*] true $($rest:tt)*) => {
+        $crate::scon!(@array [$($elems,)* $crate::scon!(@value true)] $($rest)*)
+    };
+
+    (@array [$($elems:expr,)*] false $($rest:tt)*) => {
+        $crate::scon!(@array [$($elems,)* $crate::scon!(@value false)] $($rest)*)
+    };
+
+    (@array [$($elems:expr,)*] [$($array:tt)*] $($rest:tt)*) => {
+        $crate::scon!(@array [$($elems,)* $crate::scon!(@value [$($array)*])] $($rest)*)
+    };
+
+    (@array [$($elems:expr,)*] {$($object:tt)*} $($rest:tt)*) => {
+        $crate::scon!(@array [$($elems,)* $crate::scon!(@value {$($object)*})] $($rest)*)
+    };
+
+    (@array [$($elems:expr,)*] $next:expr, $($rest:tt)*) => {
+        $crate::scon!(@array [$($elems,)* $crate::scon!(@value $next),] $($rest)*)
+    };
+
+    (@array [$($elems:expr,)*] $last:expr) => {
+        $crate::scon!(@array [$($elems,)* $crate::scon!(@value $last)])
+    };
+
+    (@array [$($elems:expr),*] , $($rest:tt)*) => {
+        $crate::scon!(@array [$($elems,)*] $($rest)*)
+    };
+
+    (@object $object:ident () () ()) => {};
+
+    (@object $object:ident [$($key:tt)+] ($value:expr) , $($rest:tt)*) => {
+        $crate::__private::insert_object(
+            &mut $object,
+            $crate::scon!(@key $($key)+),
+            $value,
+        );
+        $crate::scon!(@object $object () ($($rest)*) ($($rest)*));
+    };
+
+    (@object $object:ident [$($key:tt)+] ($value:expr) $unexpected:tt $($rest:tt)*) => {
+        compile_error!(concat!("unexpected token in scon! object: ", stringify!($unexpected)));
+    };
+
+    (@object $object:ident [$($key:tt)+] ($value:expr)) => {
+        $crate::__private::insert_object(
+            &mut $object,
+            $crate::scon!(@key $($key)+),
+            $value,
+        );
+    };
+
+    (@object $object:ident ($($key:tt)+) (: null $($rest:tt)*) $copy:tt) => {
+        $crate::scon!(@object $object [$($key)+] ($crate::scon!(@value null)) $($rest)*);
+    };
+
+    (@object $object:ident ($($key:tt)+) (: true $($rest:tt)*) $copy:tt) => {
+        $crate::scon!(@object $object [$($key)+] ($crate::scon!(@value true)) $($rest)*);
+    };
+
+    (@object $object:ident ($($key:tt)+) (: false $($rest:tt)*) $copy:tt) => {
+        $crate::scon!(@object $object [$($key)+] ($crate::scon!(@value false)) $($rest)*);
+    };
+
+    (@object $object:ident ($($key:tt)+) (: [$($array:tt)*] $($rest:tt)*) $copy:tt) => {
+        $crate::scon!(@object $object [$($key)+] ($crate::scon!(@value [$($array)*])) $($rest)*);
+    };
+
+    (@object $object:ident ($($key:tt)+) (: {$($map:tt)*} $($rest:tt)*) $copy:tt) => {
+        $crate::scon!(@object $object [$($key)+] ($crate::scon!(@value {$($map)*})) $($rest)*);
+    };
+
+    (@object $object:ident ($($key:tt)+) (: $value:expr , $($rest:tt)*) $copy:tt) => {
+        $crate::scon!(@object $object [$($key)+] ($crate::scon!(@value $value)) , $($rest)*);
+    };
+
+    (@object $object:ident ($($key:tt)+) (: $value:expr) $copy:tt) => {
+        $crate::scon!(@object $object [$($key)+] ($crate::scon!(@value $value)));
+    };
+
+    (@object $object:ident ($($key:tt)+) (:) $copy:tt) => {
+        compile_error!("missing value in scon! object");
+    };
+
+    (@object $object:ident ($($key:tt)+) () $copy:tt) => {
+        compile_error!("missing colon and value in scon! object");
+    };
+
+    (@object $object:ident () (: $($rest:tt)*) ($colon:tt $($copy:tt)*)) => {
+        compile_error!("unexpected colon in scon! object");
+    };
+
+    (@object $object:ident ($($key:tt)*) (, $($rest:tt)*) ($comma:tt $($copy:tt)*)) => {
+        compile_error!("unexpected comma in scon! object key");
+    };
+
+    (@object $object:ident () (($key:expr) : $($rest:tt)*) $copy:tt) => {
+        $crate::scon!(@object $object (($key)) (: $($rest)*) (: $($rest)*));
+    };
+
+    (@object $object:ident ($($key:tt)*) (: $($unexpected:tt)+) $copy:tt) => {
+        compile_error!("invalid expression in scon! object value");
+    };
+
+    (@object $object:ident ($($key:tt)*) ($tt:tt $($rest:tt)*) $copy:tt) => {
+        $crate::scon!(@object $object ($($key)* $tt) ($($rest)*) ($($rest)*));
+    };
+
+    (@key $key:ident) => {
+        stringify!($key).to_string()
+    };
+
+    (@key ($key:expr)) => {
+        $crate::__private::key_to_string(&$key)
+    };
+
+    (@key $key:literal) => {
+        $crate::__private::key_to_string(&$key)
+    };
+
+    (@value null) => {
+        $crate::Value::Null
+    };
+
+    (@value true) => {
+        $crate::Value::Bool(true)
+    };
+
+    (@value false) => {
+        $crate::Value::Bool(false)
+    };
+
+    (@value []) => {
+        $crate::Value::Array(vec![])
+    };
+
+    (@value [ $($tt:tt)+ ]) => {
+        $crate::Value::Array($crate::scon!(@array [] $($tt)+))
+    };
+
+    (@value {}) => {
+        $crate::Value::Object($crate::__private::new_object())
+    };
+
+    (@value { $($tt:tt)+ }) => {
+        $crate::Value::Object({
+            let mut object = $crate::__private::new_object();
+            $crate::scon!(@object object () ($($tt)+) ($($tt)+));
+            object
+        })
+    };
+
+    (@value $other:expr) => {
+        $crate::__private::to_value(&$other)
+    };
+
+    ($($scon:tt)+) => {
+        $crate::scon!(@value $($scon)+)
+    };
+}
+
 pub fn from_str<T>(source: &str) -> Result<T>
 where
     T: serde::de::DeserializeOwned,
@@ -628,5 +867,87 @@ server {
             panic!("expected object root");
         };
         assert_eq!(root["read.only"], Value::String("${literal}".to_string()));
+    }
+
+    #[test]
+    fn scon_macro_builds_nested_values() {
+        let port = 8080u64;
+        let dynamic_key = String::from("read.only");
+
+        let value = scon!({
+            name: "demo",
+            "enabled": true,
+            (dynamic_key): false,
+            port: port,
+            paths: ["/bin", "/usr/bin",],
+            server: {
+                host: "127.0.0.1",
+                tls: null,
+            },
+        });
+
+        let Value::Object(root) = value else {
+            panic!("expected object root");
+        };
+        assert_eq!(root["name"], Value::String("demo".to_string()));
+        assert_eq!(root["enabled"], Value::Bool(true));
+        assert_eq!(root["read.only"], Value::Bool(false));
+        assert_eq!(root["port"], Value::Number(Number::from_u64(8080)));
+        assert_eq!(
+            root["paths"],
+            Value::Array(vec![
+                Value::String("/bin".to_string()),
+                Value::String("/usr/bin".to_string()),
+            ])
+        );
+
+        let Value::Object(server) = &root["server"] else {
+            panic!("expected server object");
+        };
+        assert_eq!(server["host"], Value::String("127.0.0.1".to_string()));
+        assert_eq!(server["tls"], Value::Null);
+    }
+
+    #[test]
+    fn scon_macro_builds_empty_arrays_and_objects() {
+        assert_eq!(scon!([]), Value::Array(vec![]));
+        assert_eq!(scon!({}), Value::Object(IndexMap::new()));
+    }
+
+    #[test]
+    fn scon_macro_formats_fragment() {
+        let value = scon!({
+            list: [1u64, 2u64],
+        });
+
+        assert_eq!(
+            to_string_fragment(&value),
+            "{\n  list = [\n    1,\n    2,\n  ]\n}\n"
+        );
+    }
+
+    #[test]
+    fn scon_macro_uses_rust_numeric_semantics() {
+        assert_eq!(scon!(1), Value::Number(Number::from_i64(1)));
+        assert_eq!(scon!(1u64), Value::Number(Number::from_u64(1)));
+        assert_eq!(scon!(-1i64), Value::Number(Number::from_i64(-1)));
+        assert_eq!(
+            scon!(1.25f64),
+            Value::Number(Number::from_f64(1.25).unwrap())
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "scon! object keys must serialize as strings")]
+    fn scon_macro_rejects_non_string_dynamic_keys() {
+        let _ = scon!({
+            (1u64): "bad",
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "scon! failed to serialize interpolated value")]
+    fn scon_macro_rejects_non_finite_float_values() {
+        let _ = scon!(f64::NAN);
     }
 }
