@@ -31,6 +31,12 @@ cargo +nightly fuzz run parse_str -- -runs=10000
 cargo +nightly fuzz run format_source -- -runs=10000
 ```
 
+Refresh corpus seeds from the shared conformance fixtures:
+
+```sh
+./fuzz/sync-corpus.sh
+```
+
 Reproduce a crash:
 
 ```sh

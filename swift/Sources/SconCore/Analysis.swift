@@ -155,7 +155,10 @@ enum Analyzer {
     }
 
     private static func resolveTargets(_ references: inout [SconReference], _ definitions: [SconDefinition]) {
-        let byPath = Dictionary(uniqueKeysWithValues: definitions.map { ($0.path.joined(separator: "\u{0}"), $0) })
+        var byPath: [String: SconDefinition] = [:]
+        for definition in definitions {
+            byPath[definition.path.joined(separator: "\u{0}")] = definition
+        }
         for index in references.indices {
             references[index].target = byPath[references[index].path.joined(separator: "\u{0}")]
         }

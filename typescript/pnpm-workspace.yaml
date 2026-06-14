@@ -2,3 +2,5 @@ packages:
   - "packages/*"
 allowBuilds:
   esbuild: set this to true or false
+overrides:
+  yargs: 17.7.2

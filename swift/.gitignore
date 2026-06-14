@@ -1,2 +1,6 @@
 /.build/
 /.swiftpm/
+/fuzz/corpus/
+/fuzz/artifacts/
+/Fuzz/corpus/
+/Fuzz/artifacts/

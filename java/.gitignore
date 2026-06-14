@@ -1,2 +1,5 @@
 /target/
 **/target/
+/.jazzer*/
+/scon-core/src/test/resources/**/generated_corpus/
+/scon-core/src/test/resources/**/crash-*

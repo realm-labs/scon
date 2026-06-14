@@ -4,8 +4,25 @@ on:
   push:
     branches: [master]
   pull_request:
+  schedule:
+    - cron: "0 */5 * * *"
   workflow_dispatch:
     inputs:
+      fuzz_language:
+        description: "Fuzz language to run"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - rust
+          - go
+          - kotlin
+          - java
+          - typescript
+          - python
+          - csharp
+          - swift
       fuzz_target:
         description: "Fuzz target to run"
         required: false
@@ -13,7 +30,7 @@ on:
         type: choice
         options:
           - all
-          - parse_str
+          - parse
           - format_source
       fuzz_runs:
         description: "Number of libFuzzer runs per fuzz target"
@@ -27,6 +44,7 @@ on:
 jobs:
   rust:
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -41,6 +59,7 @@ jobs:
 
   kotlin:
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -53,6 +72,7 @@ jobs:
 
   go:
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -65,6 +85,7 @@ jobs:
 
   typescript:
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -82,6 +103,7 @@ jobs:
 
   python:
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -94,6 +116,7 @@ jobs:
 
   java:
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -105,6 +128,7 @@ jobs:
 
   csharp:
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -115,6 +139,7 @@ jobs:
 
   swift:
     runs-on: macos-latest
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
       - run: swift test
@@ -122,6 +147,7 @@ jobs:
 
   idea-plugin:
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -135,25 +161,90 @@ jobs:
         working-directory: kotlin
 
   fuzz-smoke:
-    runs-on: ubuntu-latest
+    name: fuzz-smoke (${{ matrix.language }})
+    runs-on: ${{ matrix.os }}
+    if: github.event_name != 'workflow_dispatch' || inputs.fuzz_language == 'all' || inputs.fuzz_language == matrix.language
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: rust
+            os: ubuntu-latest
+          - language: go
+            os: ubuntu-latest
+          - language: kotlin
+            os: ubuntu-latest
+          - language: java
+            os: ubuntu-latest
+          - language: typescript
+            os: ubuntu-latest
+          - language: python
+            os: ubuntu-latest
+          - language: csharp
+            os: ubuntu-latest
+          - language: swift
+            os: macos-latest
     env:
       FUZZ_TARGET: ${{ github.event.inputs.fuzz_target || 'all' }}
       FUZZ_RUNS: ${{ github.event.inputs.fuzz_runs || '1000' }}
       FUZZ_SECONDS: ${{ github.event.inputs.fuzz_seconds || '' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Set fuzz budget
+        shell: bash
+        run: |
+          if [ -z "${FUZZ_SECONDS}" ]; then
+            if [ "${{ github.event_name }}" = "schedule" ]; then
+              echo "FUZZ_SECONDS=300" >> "${GITHUB_ENV}"
+            else
+              echo "FUZZ_SECONDS=30" >> "${GITHUB_ENV}"
+            fi
+          fi
       - uses: dtolnay/rust-toolchain@nightly
+        if: matrix.language == 'rust'
       # cargo-fuzz 0.13.1's published lockfile pins rustix 0.36.x, which no
       # longer compiles on current nightly due reserved rustc_* attributes.
       - run: cargo install cargo-fuzz
-      - name: Run fuzz smoke
+        if: matrix.language == 'rust'
+      - uses: actions/setup-go@v5
+        if: matrix.language == 'go'
+        with:
+          go-version: "1.22"
+      - uses: actions/setup-java@v4
+        if: matrix.language == 'kotlin' || matrix.language == 'java'
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        if: matrix.language == 'kotlin'
+      - uses: actions/setup-node@v4
+        if: matrix.language == 'typescript'
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v4
+        if: matrix.language == 'typescript'
+        with:
+          version: 11.5.0
+      - uses: actions/setup-python@v5
+        if: matrix.language == 'python'
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-dotnet@v4
+        if: matrix.language == 'csharp'
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install C# fuzz tools
+        if: matrix.language == 'csharp'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y afl++
+          dotnet tool install --global SharpFuzz.CommandLine --version 2.2.0
+          echo "${HOME}/.dotnet/tools" >> "${GITHUB_PATH}"
+      - name: Run Rust fuzz smoke
+        if: matrix.language == 'rust'
         working-directory: rust
         run: |
-          if [ -n "${FUZZ_SECONDS}" ]; then
-            FUZZ_ARGS="-max_total_time=${FUZZ_SECONDS}"
-          else
-            FUZZ_ARGS="-runs=${FUZZ_RUNS}"
-          fi
+          FUZZ_ARGS="-max_total_time=${FUZZ_SECONDS}"
 
           run_target() {
             cargo +nightly fuzz run "$1" -- ${FUZZ_ARGS}
@@ -164,11 +255,194 @@ jobs:
               run_target parse_str
               run_target format_source
               ;;
-            parse_str|format_source)
-              run_target "${FUZZ_TARGET}"
+            parse)
+              run_target parse_str
+              ;;
+            format_source)
+              run_target format_source
               ;;
             *)
               echo "unknown fuzz target: ${FUZZ_TARGET}" >&2
               exit 2
               ;;
           esac
+      - name: Run Go fuzz smoke
+        if: matrix.language == 'go'
+        working-directory: go
+        run: |
+          case "${FUZZ_TARGET}" in
+            all)
+              go test ./... -run=^$ -fuzz=FuzzParseString -fuzztime="${FUZZ_SECONDS}s"
+              go test ./... -run=^$ -fuzz=FuzzFormatSource -fuzztime="${FUZZ_SECONDS}s"
+              ;;
+            parse)
+              go test ./... -run=^$ -fuzz=FuzzParseString -fuzztime="${FUZZ_SECONDS}s"
+              ;;
+            format_source)
+              go test ./... -run=^$ -fuzz=FuzzFormatSource -fuzztime="${FUZZ_SECONDS}s"
+              ;;
+            *)
+              echo "unknown fuzz target: ${FUZZ_TARGET}" >&2
+              exit 2
+              ;;
+          esac
+      - name: Run Kotlin fuzz smoke
+        if: matrix.language == 'kotlin'
+        working-directory: kotlin
+        env:
+          JAZZER_FUZZ: "1"
+        run: |
+          run_target() {
+            ./gradlew :scon-core:test -Dscon.fuzz.enabled=true -Dscon.fuzz.target="$1" -Djazzer.max_duration="${FUZZ_SECONDS}s"
+          }
+
+          case "${FUZZ_TARGET}" in
+            all)
+              run_target all
+              ;;
+            parse)
+              run_target parse
+              ;;
+            format_source)
+              run_target format_source
+              ;;
+            *)
+              echo "unknown fuzz target: ${FUZZ_TARGET}" >&2
+              exit 2
+              ;;
+          esac
+      - name: Run Java fuzz smoke
+        if: matrix.language == 'java'
+        working-directory: java
+        env:
+          JAZZER_FUZZ: "1"
+        run: |
+          run_target() {
+            mvn -pl scon-core -Dtest="$1" -Dscon.fuzz.enabled=true -Djazzer.max_duration="${FUZZ_SECONDS}s" test
+          }
+
+          case "${FUZZ_TARGET}" in
+            all)
+              run_target "ParserParseFuzzTest"
+              run_target "ParserFormatSourceFuzzTest"
+              ;;
+            parse)
+              run_target "ParserParseFuzzTest"
+              ;;
+            format_source)
+              run_target "ParserFormatSourceFuzzTest"
+              ;;
+            *)
+              echo "unknown fuzz target: ${FUZZ_TARGET}" >&2
+              exit 2
+              ;;
+          esac
+      - name: Run TypeScript fuzz smoke
+        if: matrix.language == 'typescript'
+        working-directory: typescript
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+          run_target() {
+            pnpm exec jazzer "$1" -- -max_total_time="${FUZZ_SECONDS}"
+          }
+
+          case "${FUZZ_TARGET}" in
+            all)
+              run_target packages/scon-core/fuzz/parse-string.mjs
+              run_target packages/scon-core/fuzz/format-source.mjs
+              ;;
+            parse)
+              run_target packages/scon-core/fuzz/parse-string.mjs
+              ;;
+            format_source)
+              run_target packages/scon-core/fuzz/format-source.mjs
+              ;;
+            *)
+              echo "unknown fuzz target: ${FUZZ_TARGET}" >&2
+              exit 2
+              ;;
+          esac
+      - name: Run Python fuzz smoke
+        if: matrix.language == 'python'
+        working-directory: python
+        run: |
+          python -m pip install -e ".[test,fuzz]"
+
+          run_target() {
+            python "$1" "-max_total_time=${FUZZ_SECONDS}"
+          }
+
+          case "${FUZZ_TARGET}" in
+            all)
+              run_target fuzz/parse_string_fuzz.py
+              run_target fuzz/format_source_fuzz.py
+              ;;
+            parse)
+              run_target fuzz/parse_string_fuzz.py
+              ;;
+            format_source)
+              run_target fuzz/format_source_fuzz.py
+              ;;
+            *)
+              echo "unknown fuzz target: ${FUZZ_TARGET}" >&2
+              exit 2
+              ;;
+          esac
+      - name: Run C# fuzz smoke
+        if: matrix.language == 'csharp'
+        working-directory: csharp
+        run: |
+          case "${FUZZ_TARGET}" in
+            all)
+              ./fuzz/run.sh parse "${FUZZ_SECONDS}"
+              ./fuzz/run.sh format-source "${FUZZ_SECONDS}"
+              ;;
+            parse)
+              ./fuzz/run.sh parse "${FUZZ_SECONDS}"
+              ;;
+            format_source)
+              ./fuzz/run.sh format-source "${FUZZ_SECONDS}"
+              ;;
+            *)
+              echo "unknown fuzz target: ${FUZZ_TARGET}" >&2
+              exit 2
+              ;;
+          esac
+      - name: Run Swift fuzz smoke
+        if: matrix.language == 'swift'
+        working-directory: swift
+        run: |
+          case "${FUZZ_TARGET}" in
+            all)
+              ./fuzz/run.sh parse "${FUZZ_SECONDS}"
+              ./fuzz/run.sh format-source "${FUZZ_SECONDS}"
+              ;;
+            parse)
+              ./fuzz/run.sh parse "${FUZZ_SECONDS}"
+              ;;
+            format_source)
+              ./fuzz/run.sh format-source "${FUZZ_SECONDS}"
+              ;;
+            *)
+              echo "unknown fuzz target: ${FUZZ_TARGET}" >&2
+              exit 2
+              ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-artifacts-${{ matrix.language }}
+          if-no-files-found: ignore
+          path: |
+            rust/fuzz/artifacts/
+            go/scon/testdata/fuzz/
+            kotlin/.jazzer*/
+            java/.jazzer*/
+            typescript/.jazzer*/
+            typescript/crash-*
+            typescript/timeout-*
+            python/fuzz/artifacts/
+            csharp/fuzz/findings/
+            swift/fuzz/artifacts/
