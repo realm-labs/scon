@@ -163,7 +163,6 @@ jobs:
   fuzz-smoke:
     name: fuzz-smoke (${{ matrix.language }})
     runs-on: ${{ matrix.os }}
-    if: github.event_name != 'workflow_dispatch' || inputs.fuzz_language == 'all' || inputs.fuzz_language == matrix.language
     strategy:
       fail-fast: false
       matrix:
@@ -201,47 +200,47 @@ jobs:
             fi
           fi
       - uses: dtolnay/rust-toolchain@nightly
-        if: matrix.language == 'rust'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'rust'
       # cargo-fuzz 0.13.1's published lockfile pins rustix 0.36.x, which no
       # longer compiles on current nightly due reserved rustc_* attributes.
       - run: cargo install cargo-fuzz
-        if: matrix.language == 'rust'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'rust'
       - uses: actions/setup-go@v5
-        if: matrix.language == 'go'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'go'
         with:
           go-version: "1.22"
       - uses: actions/setup-java@v4
-        if: matrix.language == 'kotlin' || matrix.language == 'java'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && (matrix.language == 'kotlin' || matrix.language == 'java')
         with:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
-        if: matrix.language == 'kotlin'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'kotlin'
       - uses: actions/setup-node@v4
-        if: matrix.language == 'typescript'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'typescript'
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v4
-        if: matrix.language == 'typescript'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'typescript'
         with:
           version: 11.5.0
       - uses: actions/setup-python@v5
-        if: matrix.language == 'python'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'python'
         with:
           python-version: "3.11"
       - uses: actions/setup-dotnet@v4
-        if: matrix.language == 'csharp'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'csharp'
         with:
           dotnet-version: "8.0.x"
       - name: Install C# fuzz tools
-        if: matrix.language == 'csharp'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'csharp'
         run: |
           sudo apt-get update
           sudo apt-get install -y afl++
           dotnet tool install --global SharpFuzz.CommandLine --version 2.2.0
           echo "${HOME}/.dotnet/tools" >> "${GITHUB_PATH}"
       - name: Run Rust fuzz smoke
-        if: matrix.language == 'rust'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'rust'
         working-directory: rust
         run: |
           FUZZ_ARGS="-max_total_time=${FUZZ_SECONDS}"
@@ -267,7 +266,7 @@ jobs:
               ;;
           esac
       - name: Run Go fuzz smoke
-        if: matrix.language == 'go'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'go'
         working-directory: go
         run: |
           case "${FUZZ_TARGET}" in
@@ -287,7 +286,7 @@ jobs:
               ;;
           esac
       - name: Run Kotlin fuzz smoke
-        if: matrix.language == 'kotlin'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'kotlin'
         working-directory: kotlin
         env:
           JAZZER_FUZZ: "1"
@@ -312,7 +311,7 @@ jobs:
               ;;
           esac
       - name: Run Java fuzz smoke
-        if: matrix.language == 'java'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'java'
         working-directory: java
         env:
           JAZZER_FUZZ: "1"
@@ -338,7 +337,7 @@ jobs:
               ;;
           esac
       - name: Run TypeScript fuzz smoke
-        if: matrix.language == 'typescript'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'typescript'
         working-directory: typescript
         run: |
           pnpm install --frozen-lockfile
@@ -365,7 +364,7 @@ jobs:
               ;;
           esac
       - name: Run Python fuzz smoke
-        if: matrix.language == 'python'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'python'
         working-directory: python
         run: |
           python -m pip install -e ".[test,fuzz]"
@@ -391,7 +390,7 @@ jobs:
               ;;
           esac
       - name: Run C# fuzz smoke
-        if: matrix.language == 'csharp'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'csharp'
         working-directory: csharp
         run: |
           case "${FUZZ_TARGET}" in
@@ -411,7 +410,7 @@ jobs:
               ;;
           esac
       - name: Run Swift fuzz smoke
-        if: matrix.language == 'swift'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'swift'
         working-directory: swift
         run: |
           case "${FUZZ_TARGET}" in
@@ -431,7 +430,7 @@ jobs:
               ;;
           esac
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: failure() && (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language)
         with:
           name: fuzz-artifacts-${{ matrix.language }}
           if-no-files-found: ignore
