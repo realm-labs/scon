@@ -62,7 +62,11 @@ function formatSubstitution(substitution: AstSubstitution): string {
 }
 
 function formatPath(path: AstPath): string {
-  return path.segments.map((segment) => segment.quoted ? quote(segment.value) : segment.value).join(".");
+  return path.segments.map((segment) => segment.quoted || isReservedSegment(segment.value) ? quote(segment.value) : segment.value).join(".");
+}
+
+function isReservedSegment(value: string): boolean {
+  return value === "include" || value === "true" || value === "false" || value === "null";
 }
 
 function quote(value: string): string {

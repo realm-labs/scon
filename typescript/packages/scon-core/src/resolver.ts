@@ -222,6 +222,7 @@ class Resolver {
   private loadInclude(file: string | undefined, include: AstInclude): Document {
     const path = include.path.value;
     if (invalidIncludePath(path)) throw new SconError("InvalidIncludePath", "invalid include path", include.span);
+    if (escapesIncludeRoot(path)) throw new SconError("IncludePathDenied", "include path escapes include root", include.span);
     const root = resolve(this.options.includeRoot ?? (file ? dirname(file) : "."));
     const base = file ? dirname(file) : root;
     const candidate = normalize(resolve(join(base, path)));
@@ -336,13 +337,25 @@ function samePath(a: string[], b: string[]): boolean {
 }
 
 function invalidIncludePath(path: string): boolean {
-  return path.includes("://") ||
+  return hasPathControlChar(path) ||
+    path.includes("://") ||
     path.startsWith("classpath:") ||
     path.includes("*") ||
     path.startsWith("~") ||
     path.startsWith("$") ||
     isAbsolute(path) ||
     /^[A-Za-z]:[\\/]/.test(path);
+}
+
+function hasPathControlChar(path: string): boolean {
+  for (const ch of path) {
+    if (ch.charCodeAt(0) < 0x20) return true;
+  }
+  return false;
+}
+
+function escapesIncludeRoot(path: string): boolean {
+  return path.split(/[\\/]+/).some((segment) => segment === "..");
 }
 
 function withinRoot(path: string, root: string): boolean {

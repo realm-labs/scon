@@ -443,5 +443,5 @@ jobs:
             typescript/crash-*
             typescript/timeout-*
             python/fuzz/artifacts/
-            csharp/fuzz/findings/
+            csharp/fuzz/artifacts/
             swift/fuzz/artifacts/

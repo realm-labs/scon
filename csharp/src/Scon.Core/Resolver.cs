@@ -132,9 +132,19 @@ internal sealed class Resolver
     {
         var path = include.Path.Value;
         if (InvalidIncludePath(path)) throw new SconException(ErrorCode.InvalidIncludePath, "invalid include path", include.Span);
-        var rootPath = Path.GetFullPath(_options.IncludeRoot ?? (file is null ? "." : Path.GetDirectoryName(file)!));
-        var basePath = file is null ? rootPath : Path.GetDirectoryName(file)!;
-        var candidate = Path.GetFullPath(Path.Combine(basePath, path));
+        string rootPath;
+        string basePath;
+        string candidate;
+        try
+        {
+            rootPath = Path.GetFullPath(_options.IncludeRoot ?? (file is null ? "." : Path.GetDirectoryName(file)!));
+            basePath = file is null ? rootPath : Path.GetDirectoryName(file)!;
+            candidate = Path.GetFullPath(Path.Combine(basePath, path));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            throw new SconException(ErrorCode.InvalidIncludePath, "invalid include path", include.Span);
+        }
         if (!candidate.StartsWith(rootPath, StringComparison.Ordinal)) throw new SconException(ErrorCode.IncludePathDenied, "include path escapes include root", include.Span);
         if (Stack.Contains(candidate)) throw new SconException(ErrorCode.IncludeCycle, $"include cycle: {candidate}", include.Span);
         if (Stack.Count >= _options.MaxIncludeDepth) throw new SconException(ErrorCode.ResourceLimitExceeded, "maximum include depth exceeded", include.Span);
@@ -148,7 +158,8 @@ internal sealed class Resolver
         catch (SconException ex) { throw new SconException(ex.Code == ErrorCode.InvalidRootType ? ErrorCode.IncludeRootTypeError : ErrorCode.IncludeParseError, ex.Message, ex.Span); }
         finally { Stack.RemoveAt(Stack.Count - 1); }
     }
-    private static bool InvalidIncludePath(string path) => path.Contains("://", StringComparison.Ordinal) || path.StartsWith("classpath:", StringComparison.Ordinal) || path.Contains('*') || path.StartsWith('~') || path.StartsWith('$') || Path.IsPathRooted(path) || Regex.IsMatch(path, "^[A-Za-z]:[\\\\/]");
+    private static bool InvalidIncludePath(string path) => HasPathControlChar(path) || path.Contains("://", StringComparison.Ordinal) || path.StartsWith("classpath:", StringComparison.Ordinal) || path.Contains('*') || path.StartsWith('~') || path.StartsWith('$') || Path.IsPathRooted(path) || Regex.IsMatch(path, "^[A-Za-z]:[\\\\/]");
+    private static bool HasPathControlChar(string path) => path.Any(ch => ch < 0x20);
     private static SconObject PublicObject(EvalObj obj) { var outObj = new SconObject(); foreach (var (key, entry) in obj.Entries) outObj.Set(key, PublicMaybe(entry.Value)); return outObj; }
     private static SconValue PublicMaybe(object value) => value is EvalObj obj ? PublicObject(obj) : (SconValue)value;
     private static object CloneAny(object value) { if (value is not EvalObj obj) return CloneValue((SconValue)value); var outObj = new EvalObj(); foreach (var (key, entry) in obj.Entries) outObj.Entries.Set(key, new(CloneAny(entry.Value), entry.Layer, entry.Kind)); return outObj; }

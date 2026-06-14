@@ -5,3 +5,4 @@ TestResults/
 fuzz/bin/
 fuzz/corpus/
 fuzz/findings/
+fuzz/artifacts/

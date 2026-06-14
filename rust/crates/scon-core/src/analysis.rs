@@ -679,6 +679,9 @@ fn format_path(path: &SconPath) -> String {
 }
 
 fn is_unquoted_key(segment: &str) -> bool {
+    if matches!(segment, "include" | "true" | "false" | "null") {
+        return false;
+    }
     let mut chars = segment.chars();
     let Some(first) = chars.next() else {
         return false;

@@ -84,9 +84,13 @@ final class SourceFormatter {
         for (int i = 0; i < path.segments().size(); i++) {
             if (i > 0) out.append('.');
             var segment = path.segments().get(i);
-            if (segment.quoted()) quote(out, segment.value());
+            if (segment.quoted() || isReservedSegment(segment.value())) quote(out, segment.value());
             else out.append(segment.value());
         }
+    }
+
+    private static boolean isReservedSegment(String value) {
+        return value.equals("include") || value.equals("true") || value.equals("false") || value.equals("null");
     }
 
     private static void quote(StringBuilder out, String value) {

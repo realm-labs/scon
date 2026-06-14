@@ -113,10 +113,12 @@ public static class SourceFormatter
         {
             if (index > 0) output.Append('.');
             var segment = path.Segments[index];
-            if (segment.Quoted) WriteQuoted(output, segment.Value);
+            if (segment.Quoted || IsReservedSegment(segment.Value)) WriteQuoted(output, segment.Value);
             else output.Append(segment.Value);
         }
     }
+
+    private static bool IsReservedSegment(string value) => value is "include" or "true" or "false" or "null";
 
     private static void WriteQuoted(StringBuilder output, string value)
     {

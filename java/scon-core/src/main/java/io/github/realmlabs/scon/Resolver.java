@@ -298,8 +298,15 @@ final class Resolver {
     }
 
     private static boolean invalidIncludePath(String path) {
-        return path.contains("://") || path.startsWith("classpath:") || path.contains("*") || path.startsWith("~")
+        return hasPathControlChar(path) || path.contains("://") || path.startsWith("classpath:") || path.contains("*") || path.startsWith("~")
             || path.startsWith("$") || Path.of(path).isAbsolute() || path.matches("^[A-Za-z]:[\\\\/].*");
+    }
+
+    private static boolean hasPathControlChar(String path) {
+        for (int index = 0; index < path.length(); index++) {
+            if (path.charAt(index) < 0x20) return true;
+        }
+        return false;
     }
 
     private static final class EvalObject {
