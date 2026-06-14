@@ -2,6 +2,8 @@ namespace RealmLabs.Scon;
 
 public static class Scon
 {
+    public static SconParsedSource ParseSource(string source, string? file = null) => Analyzer.ParseSource(source, file);
+    public static SconAnalysis AnalyzeSource(string source, string? file = null) => Analyzer.AnalyzeSource(source, file);
     public static SconValue ParseString(string source) => new Resolver(new LoadOptions()).Eval(Parser.ParseDocument(source));
     public static SconValue ParseFile(string path, LoadOptions? options = null)
     {
@@ -15,6 +17,7 @@ public static class Scon
         return resolver.Eval(Parser.ParseDocument(source, file));
     }
     public static string FormatValue(SconValue value) => Formatter.FormatValue(value);
+    public static string FormatSource(string source) => SourceFormatter.FormatSource(source);
     public static SconValue GetPath(SconValue value, string path)
     {
         var current = value;

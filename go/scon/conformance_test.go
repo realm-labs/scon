@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -132,6 +133,36 @@ func TestTypedRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cfg, decoded) {
 		t.Fatalf("round trip mismatch: %#v", decoded)
+	}
+}
+
+func TestAnalysisAndFormatSource(t *testing.T) {
+	source := "defaults { port = 8080 }\nserver = ${defaults.port}\nitems = [1, ...${extra}]\n"
+	analysis := AnalyzeSource(source)
+	if len(analysis.Diagnostics) != 1 || analysis.Diagnostics[0].Code != MissingReference {
+		t.Fatalf("expected missing reference diagnostic, got %#v", analysis.Diagnostics)
+	}
+	if len(analysis.Symbols) < 3 {
+		t.Fatalf("expected symbols, got %#v", analysis.Symbols)
+	}
+	if len(analysis.References) != 2 {
+		t.Fatalf("expected references, got %#v", analysis.References)
+	}
+
+	formatted, err := FormatSource(`# keep me
+include "base.scon"
+defaults { port = 8080 }
+server = ${defaults.port}
+items = [1, ...${extra}]
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseDocument(formatted, ""); err != nil {
+		t.Fatalf("formatted source did not parse: %v\n%s", err, formatted)
+	}
+	if !strings.Contains(formatted, `# keep me`) || !strings.Contains(formatted, `include "base.scon"`) || !strings.Contains(formatted, "...${extra}") {
+		t.Fatalf("formatted source lost source-level constructs:\n%s", formatted)
 	}
 }
 

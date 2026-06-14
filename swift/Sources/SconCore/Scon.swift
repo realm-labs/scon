@@ -1,6 +1,8 @@
 import Foundation
 
 public enum Scon {
+    public static func parseSource(_ source: String, file: String? = nil) throws -> ParsedSource { try Analyzer.parseSource(source, file: file) }
+    public static func analyzeSource(_ source: String, file: String? = nil) -> SconAnalysis { Analyzer.analyzeSource(source, file: file) }
     public static func parseString(_ source: String) throws -> SconValue { try Resolver(.default).eval(Parser.parseDocument(source)) }
     public static func parseFile(_ path: String, options: LoadOptions = .default) throws -> SconValue {
         var opts = options
@@ -10,6 +12,7 @@ public enum Scon {
         return try resolver.eval(Parser.parseDocument(String(contentsOfFile: file, encoding: .utf8), file: file))
     }
     public static func formatValue(_ value: SconValue) throws -> String { try Formatter.formatValue(value) }
+    public static func formatSource(_ source: String) throws -> String { try SourceFormatter.formatSource(source) }
     public static func getPath(_ value: SconValue, _ path: String) throws -> SconValue { var current = value; for segment in path.split(separator: ".").map(String.init) { guard case .object(let object) = current else { throw SconError(.TypeMismatch, "path segment requires object") }; guard let next = object[segment] else { throw SconError(.MissingReference, "path is not defined") }; current = next }; return current }
     public static func decode<T: Decodable>(_ source: String, as type: T.Type) throws -> T { try JSONDecoder().decode(T.self, from: JSONSerialization.data(withJSONObject: plain(try parseString(source)))) }
     public static func encode<T: Encodable>(_ value: T) throws -> String { let any = try JSONSerialization.jsonObject(with: JSONEncoder().encode(value)); return try formatValue(fromPlain(any)) }

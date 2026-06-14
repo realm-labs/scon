@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { formatValue, parseFile, parseString, SconError, sconToPlain } from "../src/index.js";
+import { analyzeSource, formatSource, formatValue, parseFile, parseString, SconError, sconToPlain } from "../src/index.js";
 
 type Manifest = { cases: Case[] };
 type Case = { id: string; description: string; entry: string; kind: "valid" | "invalid"; expected: string };
@@ -28,6 +28,21 @@ for (const entry of manifest.cases) {
     );
   });
 }
+
+test("analysis and source formatter preserve source constructs", () => {
+  const source = "defaults { port = 8080 }\nserver = ${defaults.port}\nitems = [1, ...${extra}]\n";
+  const analysis = analyzeSource(source);
+  assert.equal(analysis.diagnostics.length, 1);
+  assert.equal(analysis.diagnostics[0]?.code, "MissingReference");
+  assert.ok(analysis.symbols.length >= 3);
+  assert.equal(analysis.references.length, 2);
+
+  const formatted = formatSource("# keep me\ninclude \"base.scon\"\ndefaults { port = 8080 }\nserver = ${defaults.port}\nitems = [1, ...${extra}]\n");
+  assert.ok(analyzeSource(formatted).parsed);
+  assert.match(formatted, /# keep me/);
+  assert.match(formatted, /include "base\.scon"/);
+  assert.match(formatted, /\.\.\.\$\{extra\}/);
+});
 
 function normalizeNumbers(value: unknown): unknown {
   if (typeof value === "number") return Number(value);

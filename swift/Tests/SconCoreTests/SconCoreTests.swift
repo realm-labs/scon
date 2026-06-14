@@ -42,6 +42,20 @@ import Testing
         #expect(cfg == Config(name: "demo", port: 8080, tags: ["a", "b"], mode: .fast))
         #expect(try Scon.decode(try Scon.encode(cfg), as: Config.self) == cfg)
     }
+
+    @Test func analysisAndSourceFormatter() throws {
+        let source = "defaults { port = 8080 }\nserver = ${defaults.port}\nitems = [1, ...${extra}]\n"
+        let analysis = Scon.analyzeSource(source)
+        #expect(analysis.diagnostics.map(\.code) == [.MissingReference])
+        #expect(analysis.symbols.count >= 3)
+        #expect(analysis.references.count == 2)
+
+        let formatted = try Scon.formatSource("# keep me\ninclude \"base.scon\"\ndefaults { port = 8080 }\nserver = ${defaults.port}\nitems = [1, ...${extra}]\n")
+        #expect(Scon.analyzeSource(formatted).parsed != nil)
+        #expect(formatted.contains("# keep me"))
+        #expect(formatted.contains("include \"base.scon\""))
+        #expect(formatted.contains("...${extra}"))
+    }
 }
 
 private func jsonEqual(_ a: Any, _ b: Any) -> Bool {

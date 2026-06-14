@@ -50,3 +50,23 @@ def test_typed_errors():
         scon.to_scon({1: "bad"})
     with pytest.raises(SconError):
         scon.from_scon("name = 1", Config)
+
+
+def test_analysis_and_source_formatter_preserve_source_constructs():
+    source = "defaults { port = 8080 }\nserver = ${defaults.port}\nitems = [1, ...${extra}]\n"
+    analysis = scon.analyze_source(source)
+    assert [diagnostic.code for diagnostic in analysis.diagnostics] == ["MissingReference"]
+    assert len(analysis.symbols) >= 3
+    assert len(analysis.references) == 2
+
+    formatted = scon.format_source(
+        "# keep me\n"
+        'include "base.scon"\n'
+        "defaults { port = 8080 }\n"
+        "server = ${defaults.port}\n"
+        "items = [1, ...${extra}]\n"
+    )
+    assert scon.analyze_source(formatted).parsed is not None
+    assert "# keep me" in formatted
+    assert 'include "base.scon"' in formatted
+    assert "...${extra}" in formatted

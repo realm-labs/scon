@@ -59,6 +59,23 @@ public sealed class SconTests
         Assert.Throws<SconException>(() => SconMapper.Deserialize<Config>("Name = 1"));
     }
 
+    [Fact]
+    public void AnalyzesAndFormatsSourceConstructs()
+    {
+        var source = "defaults { port = 8080 }\nserver = ${defaults.port}\nitems = [1, ...${extra}]\n";
+        var analysis = RealmLabs.Scon.Scon.AnalyzeSource(source);
+        Assert.Single(analysis.Diagnostics);
+        Assert.Equal(ErrorCode.MissingReference, analysis.Diagnostics[0].Code);
+        Assert.True(analysis.Symbols.Count >= 3);
+        Assert.Equal(2, analysis.References.Count);
+
+        var formatted = RealmLabs.Scon.Scon.FormatSource("# keep me\ninclude \"base.scon\"\ndefaults { port = 8080 }\nserver = ${defaults.port}\nitems = [1, ...${extra}]\n");
+        Assert.NotNull(RealmLabs.Scon.Scon.AnalyzeSource(formatted).Parsed);
+        Assert.Contains("# keep me", formatted);
+        Assert.Contains("include \"base.scon\"", formatted);
+        Assert.Contains("...${extra}", formatted);
+    }
+
     private static JsonNode? ToJson(SconValue value) => JsonNode.Parse(JsonSerializer.Serialize(SconMapper.ToPlain(value)));
     private static bool JsonEqual(JsonNode? a, JsonNode? b)
     {

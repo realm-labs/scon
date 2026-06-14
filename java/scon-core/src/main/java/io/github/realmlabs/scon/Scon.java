@@ -7,6 +7,14 @@ import java.nio.file.Path;
 public final class Scon {
     private Scon() {}
 
+    public static Analysis.ParsedSource parseSource(String source) {
+        return Analysis.parseSource(source, null);
+    }
+
+    public static Analysis.DocumentAnalysis analyzeSource(String source) {
+        return Analysis.analyzeSource(source, null);
+    }
+
     public static SconValue parseString(String source) {
         return new Resolver(LoadOptions.defaults()).eval(Parser.parseDocument(source, null));
     }
@@ -34,6 +42,10 @@ public final class Scon {
 
     public static String formatValue(SconValue value) {
         return Formatter.formatValue(value);
+    }
+
+    public static String formatSource(String source) {
+        return SourceFormatter.formatSource(source);
     }
 
     public static SconValue getPath(SconValue value, String path) {
