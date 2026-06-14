@@ -106,7 +106,7 @@ jobs:
     if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install -e ".[test]"
@@ -224,7 +224,7 @@ jobs:
         if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'typescript'
         with:
           version: 11.5.0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'python'
         with:
           python-version: "3.11"
