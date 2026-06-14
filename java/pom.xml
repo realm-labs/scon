@@ -18,7 +18,7 @@
     <junit.version>5.14.1</junit.version>
     <junit-platform.version>1.14.1</junit-platform.version>
     <jazzer-junit.version>0.30.0</jazzer-junit.version>
-    <jackson.version>2.20.2</jackson.version>
+    <jackson.version>2.22.0</jackson.version>
   </properties>
 
   <dependencyManagement>
