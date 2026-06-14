@@ -33,6 +33,12 @@ final class SconMapperTest {
     }
 
     @Test
+    void rejectsMalformedIncludePathsAsSconErrors() {
+        var error = assertThrows(SconException.class, () -> Scon.parseString("include \"\\ud800.scon\"\n"));
+        assertEquals(ErrorCode.InvalidIncludePath, error.code());
+    }
+
+    @Test
     void analyzesAndFormatsSourceConstructs() {
         var source = "defaults { port = 8080 }\nserver = ${defaults.port}\nitems = [1, ...${extra}]\n";
         var analysis = Scon.analyzeSource(source);

@@ -3,6 +3,7 @@ package io.github.realmlabs.scon;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.*;
 
@@ -204,9 +205,16 @@ final class Resolver {
     private Ast.Document loadInclude(String file, Ast.Include include) {
         String path = include.path().value();
         if (invalidIncludePath(path)) throw new SconException(ErrorCode.InvalidIncludePath, "invalid include path", include.span());
-        Path rootPath = (options.includeRoot() != null ? options.includeRoot() : (file == null ? Path.of(".") : Path.of(file).getParent())).toAbsolutePath().normalize();
-        Path base = file == null ? rootPath : Path.of(file).getParent();
-        Path candidate = base.resolve(path).toAbsolutePath().normalize();
+        Path rootPath;
+        Path base;
+        Path candidate;
+        try {
+            rootPath = (options.includeRoot() != null ? options.includeRoot() : (file == null ? Path.of(".") : Path.of(file).getParent())).toAbsolutePath().normalize();
+            base = file == null ? rootPath : Path.of(file).getParent();
+            candidate = base.resolve(path).toAbsolutePath().normalize();
+        } catch (InvalidPathException ex) {
+            throw new SconException(ErrorCode.InvalidIncludePath, "invalid include path", include.span());
+        }
         if (!candidate.startsWith(rootPath)) throw new SconException(ErrorCode.IncludePathDenied, "include path escapes include root", include.span());
         if (stack.contains(candidate)) throw new SconException(ErrorCode.IncludeCycle, "include cycle: " + candidate, include.span());
         if (stack.size() >= options.maxIncludeDepth()) throw new SconException(ErrorCode.ResourceLimitExceeded, "maximum include depth exceeded", include.span());
@@ -298,8 +306,15 @@ final class Resolver {
     }
 
     private static boolean invalidIncludePath(String path) {
-        return hasPathControlChar(path) || path.contains("://") || path.startsWith("classpath:") || path.contains("*") || path.startsWith("~")
-            || path.startsWith("$") || Path.of(path).isAbsolute() || path.matches("^[A-Za-z]:[\\\\/].*");
+        if (hasPathControlChar(path) || path.contains("://") || path.startsWith("classpath:") || path.contains("*") || path.startsWith("~")
+            || path.startsWith("$") || path.matches("^[A-Za-z]:[\\\\/].*")) {
+            return true;
+        }
+        try {
+            return Path.of(path).isAbsolute();
+        } catch (InvalidPathException ex) {
+            return true;
+        }
     }
 
     private static boolean hasPathControlChar(String path) {
