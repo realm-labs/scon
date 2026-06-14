@@ -644,6 +644,17 @@ url = "http://${defaults.host}"
     }
 
     #[test]
+    fn format_source_escapes_interpolation_in_quoted_keys() {
+        let formatted = format_source(r#""\${literal}" = true"#, FormatOptions::default()).unwrap();
+
+        parse_source(&formatted, ParseOptions::default()).unwrap();
+        assert_eq!(
+            parse_str(r#""\${literal}" = true"#).unwrap(),
+            parse_str(&formatted).unwrap()
+        );
+    }
+
+    #[test]
     fn line_index_maps_utf8_and_utf16_positions() {
         let source = "name = \"\u{1F980}\"\nnext = 1\n";
         let index = LineIndex::new(source);

@@ -692,13 +692,15 @@ fn is_unquoted_key(segment: &str) -> bool {
 
 fn format_string_literal(text: &str) -> String {
     let mut out = String::from("\"");
-    for ch in text.chars() {
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
         match ch {
             '"' => out.push_str("\\\""),
             '\\' => out.push_str("\\\\"),
             '\n' => out.push_str("\\n"),
             '\r' => out.push_str("\\r"),
             '\t' => out.push_str("\\t"),
+            '$' if chars.peek() == Some(&'{') => out.push_str("\\$"),
             ch if ch.is_control() => {
                 use std::fmt::Write;
                 let _ = write!(out, "\\u{:04x}", ch as u32);
