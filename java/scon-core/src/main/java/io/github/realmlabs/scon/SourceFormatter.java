@@ -84,9 +84,13 @@ final class SourceFormatter {
         for (int i = 0; i < path.segments().size(); i++) {
             if (i > 0) out.append('.');
             var segment = path.segments().get(i);
-            if (segment.quoted() || isReservedSegment(segment.value())) quote(out, segment.value());
+            if (segment.quoted() || !isUnquotedSegment(segment.value())) quote(out, segment.value());
             else out.append(segment.value());
         }
+    }
+
+    private static boolean isUnquotedSegment(String value) {
+        return !isReservedSegment(value) && value.matches("[A-Za-z_][A-Za-z0-9_-]*");
     }
 
     private static boolean isReservedSegment(String value) {
@@ -105,7 +109,10 @@ final class SourceFormatter {
                 case '\t' -> out.append("\\t");
                 case '\b' -> out.append("\\b");
                 case '\f' -> out.append("\\f");
-                default -> out.append(ch);
+                default -> {
+                    if (Character.isISOControl(ch)) out.append(String.format("\\u%04X", (int) ch));
+                    else out.append(ch);
+                }
             }
         }
         out.append('"');

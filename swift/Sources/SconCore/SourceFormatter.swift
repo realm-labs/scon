@@ -63,7 +63,12 @@ enum SourceFormatter {
     }
 
     private static func formatPath(_ path: AstPath) -> String {
-        path.segments.map { $0.quoted ? quote($0.value) : $0.value }.joined(separator: ".")
+        path.segments.map { $0.quoted || !isUnquotedSegment($0.value) ? quote($0.value) : $0.value }.joined(separator: ".")
+    }
+
+    private static func isUnquotedSegment(_ value: String) -> Bool {
+        !["include", "true", "false", "null"].contains(value)
+            && value.range(of: #"^[A-Za-z_][A-Za-z0-9_-]*$"#, options: .regularExpression) != nil
     }
 
     private static func quote(_ value: String) -> String {
@@ -76,6 +81,8 @@ enum SourceFormatter {
             case "\t": "\\t"
             case "\u{0008}": "\\b"
             case "\u{000C}": "\\f"
+            case let ch where ch.unicodeScalars.allSatisfy({ $0.value < 0x20 }):
+                "\\u" + String(format: "%04X", ch.unicodeScalars.first!.value)
             default: String(ch)
             }
         } + "\""

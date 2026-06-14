@@ -45,7 +45,15 @@ final class Formatter {
     }
 
     private static String formatKey(String key) {
-        return key.matches("[A-Za-z_][A-Za-z0-9_-]*") ? key : quote(key, false);
+        return isUnquotedKey(key) ? key : quote(key, false);
+    }
+
+    private static boolean isUnquotedKey(String key) {
+        return !isReservedSegment(key) && key.matches("[A-Za-z_][A-Za-z0-9_-]*");
+    }
+
+    private static boolean isReservedSegment(String value) {
+        return value.equals("include") || value.equals("true") || value.equals("false") || value.equals("null");
     }
 
     private static String quote(String value, boolean escapeInterpolation) {

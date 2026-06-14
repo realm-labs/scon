@@ -102,6 +102,9 @@ fn format_key(key: &str) -> String {
 }
 
 fn is_identifier(key: &str) -> bool {
+    if matches!(key, "include" | "true" | "false" | "null") {
+        return false;
+    }
     let mut chars = key.chars();
     let Some(first) = chars.next() else {
         return false;

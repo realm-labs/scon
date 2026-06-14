@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from io import StringIO
 
-from .format import _quote
+from .format import _is_unquoted_key, _quote
 from .lexer import lex
 from .parser import (
     AstArray,
@@ -97,7 +97,7 @@ def _write_path(out: StringIO, path: AstPath) -> None:
     for index, segment in enumerate(path.segments):
         if index:
             out.write(".")
-        if segment.quoted:
+        if segment.quoted or not _is_unquoted_key(segment.value):
             out.write(_quote(segment.value, escape_interpolation=False))
         else:
             out.write(segment.value)

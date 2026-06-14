@@ -113,10 +113,12 @@ public static class SourceFormatter
         {
             if (index > 0) output.Append('.');
             var segment = path.Segments[index];
-            if (segment.Quoted || IsReservedSegment(segment.Value)) WriteQuoted(output, segment.Value);
+            if (segment.Quoted || !IsUnquotedSegment(segment.Value)) WriteQuoted(output, segment.Value);
             else output.Append(segment.Value);
         }
     }
+
+    private static bool IsUnquotedSegment(string value) => !IsReservedSegment(value) && Regex.IsMatch(value, "^[A-Za-z_][A-Za-z0-9_-]*$");
 
     private static bool IsReservedSegment(string value) => value is "include" or "true" or "false" or "null";
 
@@ -134,6 +136,7 @@ public static class SourceFormatter
                 '\t' => "\\t",
                 '\b' => "\\b",
                 '\f' => "\\f",
+                _ when char.IsControl(ch) => $"\\u{(int)ch:X4}",
                 _ => ch.ToString(),
             });
         }

@@ -62,24 +62,30 @@ function formatSubstitution(substitution: AstSubstitution): string {
 }
 
 function formatPath(path: AstPath): string {
-  return path.segments.map((segment) => segment.quoted || isReservedSegment(segment.value) ? quote(segment.value) : segment.value).join(".");
+  return path.segments.map((segment) => segment.quoted || !isUnquotedSegment(segment.value) ? quote(segment.value) : segment.value).join(".");
+}
+
+function isUnquotedSegment(value: string): boolean {
+  return !isReservedSegment(value) && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(value);
+}
+
+function quote(value: string): string {
+  let out = "\"";
+  for (const ch of value) {
+    const code = ch.charCodeAt(0);
+    if (ch === '"') out += "\\\"";
+    else if (ch === "\\") out += "\\\\";
+    else if (ch === "\n") out += "\\n";
+    else if (ch === "\r") out += "\\r";
+    else if (ch === "\t") out += "\\t";
+    else if (ch === "\b") out += "\\b";
+    else if (ch === "\f") out += "\\f";
+    else if (code < 0x20) out += `\\u${code.toString(16).padStart(4, "0").toUpperCase()}`;
+    else out += ch;
+  }
+  return `${out}"`;
 }
 
 function isReservedSegment(value: string): boolean {
   return value === "include" || value === "true" || value === "false" || value === "null";
-}
-
-function quote(value: string): string {
-  return `"${[...value].map((ch) => {
-    switch (ch) {
-      case "\"": return "\\\"";
-      case "\\": return "\\\\";
-      case "\n": return "\\n";
-      case "\r": return "\\r";
-      case "\t": return "\\t";
-      case "\b": return "\\b";
-      case "\f": return "\\f";
-      default: return ch;
-    }
-  }).join("")}"`;
 }

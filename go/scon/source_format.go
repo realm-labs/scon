@@ -98,7 +98,7 @@ func writeSourcePath(out *strings.Builder, path astPath) {
 		if idx > 0 {
 			out.WriteByte('.')
 		}
-		if segment.quoted {
+		if segment.quoted || !isSconIdentifier(segment.value) {
 			writeString(out, segment.value)
 		} else {
 			out.WriteString(segment.value)

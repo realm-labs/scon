@@ -196,6 +196,7 @@ internal fun formatStringLiteral(text: String): String =
     }
 
 internal fun String.isSconIdentifier(): Boolean {
+    if (this == "include" || this == "true" || this == "false" || this == "null") return false
     if (isEmpty()) return false
     val first = first()
     if (!first.isAsciiLetter() && first != '_') return false

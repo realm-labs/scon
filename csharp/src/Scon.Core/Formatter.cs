@@ -14,7 +14,9 @@ internal static class Formatter
         SconObject o => o.Count == 0 ? "{}" : "{\n" + FormatObjectBody(o, indent + 2) + new string(' ', indent) + "}",
         _ => throw new SconException(ErrorCode.Serde, "unsupported SCON value"),
     };
-    private static string FormatKey(string key) => Regex.IsMatch(key, "^[A-Za-z_][A-Za-z0-9_-]*$") ? key : Quote(key, false);
+    private static string FormatKey(string key) => IsUnquotedKey(key) ? key : Quote(key, false);
+    private static bool IsUnquotedKey(string key) => !IsReservedKey(key) && Regex.IsMatch(key, "^[A-Za-z_][A-Za-z0-9_-]*$");
+    private static bool IsReservedKey(string key) => key is "include" or "true" or "false" or "null";
     private static string Quote(string value, bool escapeInterpolation)
     {
         var outText = new StringBuilder("\"");

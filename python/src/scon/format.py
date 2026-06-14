@@ -41,7 +41,11 @@ def _format_scon(value: SconValue, indent: int) -> str:
 
 
 def _format_key(key: str) -> str:
-    return key if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", key) else _quote(key, False)
+    return key if _is_unquoted_key(key) else _quote(key, False)
+
+
+def _is_unquoted_key(key: str) -> bool:
+    return key not in {"include", "true", "false", "null"} and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", key) is not None
 
 
 def _quote(value: str, escape_interpolation: bool) -> str:

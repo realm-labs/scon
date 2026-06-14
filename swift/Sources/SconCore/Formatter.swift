@@ -34,7 +34,12 @@ enum Formatter {
     }
 
     private static func formatKey(_ key: String) -> String {
-        key.range(of: #"^[A-Za-z_][A-Za-z0-9_-]*$"#, options: .regularExpression) != nil ? key : quote(key, false)
+        isUnquotedKey(key) ? key : quote(key, false)
+    }
+
+    private static func isUnquotedKey(_ key: String) -> Bool {
+        !["include", "true", "false", "null"].contains(key)
+            && key.range(of: #"^[A-Za-z_][A-Za-z0-9_-]*$"#, options: .regularExpression) != nil
     }
 
     private static func quote(_ value: String, _ escapeInterpolation: Bool) -> String {
@@ -48,6 +53,8 @@ enum Formatter {
             case "\u{0008}": "\\b"
             case "\u{000C}": "\\f"
             case "$" where escapeInterpolation: "\\$"
+            case let ch where ch.unicodeScalars.allSatisfy({ $0.value < 0x20 }):
+                "\\u" + String(format: "%04X", ch.unicodeScalars.first!.value)
             default: String(ch)
             }
         } + "\""

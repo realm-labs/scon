@@ -117,6 +117,9 @@ func formatKey(key string) string {
 }
 
 func isSconIdentifier(value string) bool {
+	if isReservedIdentifier(value) {
+		return false
+	}
 	if value == "" {
 		return false
 	}
@@ -132,6 +135,10 @@ func isSconIdentifier(value string) bool {
 		}
 	}
 	return true
+}
+
+func isReservedIdentifier(value string) bool {
+	return value == "include" || value == "true" || value == "false" || value == "null"
 }
 
 func GetPath(value Value, path string) (Value, error) {

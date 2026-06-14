@@ -31,18 +31,31 @@ function formatScon(value: SconValue, indent: number): string {
 }
 
 function formatKey(key: string): string {
-  return /^[A-Za-z_][A-Za-z0-9_-]*$/.test(key) ? key : quote(key);
+  return isUnquotedKey(key) ? key : quote(key);
 }
 
 function quote(value: string, escapeInterpolation = false): string {
-  return `"${value.replace(/["\\\n\r\t\b\f$]/g, (ch) => {
-    if (ch === '"') return '\\"';
-    if (ch === "\\") return "\\\\";
-    if (ch === "\n") return "\\n";
-    if (ch === "\r") return "\\r";
-    if (ch === "\t") return "\\t";
-    if (ch === "\b") return "\\b";
-    if (ch === "\f") return "\\f";
-    return escapeInterpolation ? "\\$" : "$";
-  })}"`;
+  let out = "\"";
+  for (const ch of value) {
+    const code = ch.charCodeAt(0);
+    if (ch === '"') out += '\\"';
+    else if (ch === "\\") out += "\\\\";
+    else if (ch === "\n") out += "\\n";
+    else if (ch === "\r") out += "\\r";
+    else if (ch === "\t") out += "\\t";
+    else if (ch === "\b") out += "\\b";
+    else if (ch === "\f") out += "\\f";
+    else if (ch === "$" && escapeInterpolation) out += "\\$";
+    else if (code < 0x20) out += `\\u${code.toString(16).padStart(4, "0").toUpperCase()}`;
+    else out += ch;
+  }
+  return `${out}"`;
+}
+
+function isUnquotedKey(key: string): boolean {
+  return !isReservedSegment(key) && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(key);
+}
+
+function isReservedSegment(value: string): boolean {
+  return value === "include" || value === "true" || value === "false" || value === "null";
 }
