@@ -66,7 +66,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew :scon-core:test :scon-kotlinx-serialization:test
         working-directory: kotlin
 
@@ -154,7 +154,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew :idea-plugin:buildPlugin
         working-directory: kotlin
       - run: ./gradlew :idea-plugin:verifyPlugin
@@ -214,7 +214,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'kotlin'
       - uses: actions/setup-node@v4
         if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'typescript'
