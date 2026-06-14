@@ -131,7 +131,7 @@ jobs:
     if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "8.0.x"
       - run: dotnet test
@@ -228,7 +228,7 @@ jobs:
         if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'python'
         with:
           python-version: "3.11"
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         if: (github.event_name != 'workflow_dispatch' || github.event.inputs.fuzz_language == 'all' || github.event.inputs.fuzz_language == matrix.language) && matrix.language == 'csharp'
         with:
           dotnet-version: "8.0.x"
